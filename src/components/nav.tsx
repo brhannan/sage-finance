@@ -24,7 +24,7 @@ export function Nav() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center h-14 gap-6">
           <Link href="/" className="font-bold text-lg shrink-0">
-            MyBudget
+            Sage Finance
           </Link>
           <div className="flex items-center gap-1 overflow-x-auto">
             {navItems.map((item) => (

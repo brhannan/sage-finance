@@ -37,17 +37,33 @@ export async function POST(request: NextRequest) {
   try {
     const db = getDb();
     const body = await request.json();
-    const { message, conversationType } = body;
+    const { message, conversationType, model } = body;
+
+    const ALLOWED_MODELS = [
+      'claude-sonnet-4-5-20250929',
+      'claude-opus-4-6',
+      'claude-haiku-4-5-20251001',
+    ];
+    const selectedModel = ALLOWED_MODELS.includes(model) ? model : 'claude-sonnet-4-5-20250929';
 
     if (!message) {
       return NextResponse.json({ error: 'message is required' }, { status: 400 });
     }
 
+    const convType = conversationType || 'general';
+
     // Save user message
     db.prepare(`
       INSERT INTO conversations (role, content, conversation_type)
       VALUES ('user', ?, ?)
-    `).run(message, conversationType || 'general');
+    `).run(message, convType);
+
+    // Load conversation summaries for context
+    const summaries = db.prepare(`
+      SELECT summary_json FROM conversation_summaries
+      WHERE conversation_type = ?
+      ORDER BY messages_end_id ASC
+    `).all(convType) as Array<{ summary_json: string }>;
 
     // Build financial context
     const profile = db.prepare('SELECT key, value FROM advisor_profile').all() as Array<{ key: string; value: string }>;
@@ -82,7 +98,10 @@ ${topSpending || '  No spending data available.'}
 
 FINANCIAL GOALS:
 ${goalsContext || '  No goals set yet.'}
-
+${summaries.length > 0 ? `
+CONVERSATION HISTORY SUMMARY:
+${summaries.map(s => s.summary_json).join('\n\n')}
+` : ''}
 GUIDELINES:
 - Be concise but thorough. Use specific numbers from the user's data.
 - Offer actionable advice tailored to their situation.
@@ -91,13 +110,13 @@ GUIDELINES:
 - When relevant, mention tax implications, compound interest effects, or opportunity costs.
 - Do not make up financial data. Only reference what is provided above.`;
 
-    // Get recent conversation history for context
+    // Get recent conversation history for context (reduced from 20 since summaries cover older history)
     const recentMessages = db.prepare(`
       SELECT role, content FROM conversations
       WHERE conversation_type = ?
       ORDER BY created_at DESC
-      LIMIT 20
-    `).all(conversationType || 'general') as Array<{ role: string; content: string }>;
+      LIMIT 10
+    `).all(convType) as Array<{ role: string; content: string }>;
 
     // Build messages array (chronological order)
     const conversationMessages: Array<{ role: 'user' | 'assistant'; content: string }> = recentMessages
@@ -110,7 +129,7 @@ GUIDELINES:
 
     // Call Claude
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: selectedModel,
       max_tokens: 1024,
       system: systemPrompt,
       messages: conversationMessages,
@@ -125,11 +144,47 @@ GUIDELINES:
     db.prepare(`
       INSERT INTO conversations (role, content, conversation_type)
       VALUES ('assistant', ?, ?)
-    `).run(assistantContent, conversationType || 'general');
+    `).run(assistantContent, convType);
+
+    // Auto-compaction: check if there are enough unsummarized messages
+    try {
+      const lastSummary = db.prepare(`
+        SELECT messages_end_id FROM conversation_summaries
+        WHERE conversation_type = ?
+        ORDER BY messages_end_id DESC LIMIT 1
+      `).get(convType) as { messages_end_id: number } | undefined;
+
+      const unsummarizedCount = db.prepare(`
+        SELECT COUNT(*) as count FROM conversations
+        WHERE conversation_type = ? AND id > ?
+      `).get(convType, lastSummary?.messages_end_id ?? 0) as { count: number };
+
+      if (unsummarizedCount.count > 20) {
+        // Fire compaction in the background (non-blocking)
+        const baseUrl = request.nextUrl.origin;
+        fetch(`${baseUrl}/api/advisor/compact`, { method: 'POST' }).catch(() => {});
+      }
+    } catch (compactErr) {
+      console.error('Auto-compaction check failed:', compactErr);
+    }
+
+    const inputTokens = response.usage.input_tokens;
+    const outputTokens = response.usage.output_tokens;
+    // Per-model pricing ($/M tokens): input / output
+    const pricing: Record<string, [number, number]> = {
+      'claude-sonnet-4-5-20250929': [3, 15],
+      'claude-opus-4-6': [15, 75],
+      'claude-haiku-4-5-20251001': [0.80, 4],
+    };
+    const [inPrice, outPrice] = pricing[selectedModel] ?? [3, 15];
+    const cost = (inputTokens * inPrice + outputTokens * outPrice) / 1_000_000;
 
     return NextResponse.json({
       role: 'assistant',
       content: assistantContent,
+      model: response.model,
+      usage: { input_tokens: inputTokens, output_tokens: outputTokens },
+      cost,
     });
   } catch (error) {
     console.error('POST /api/advisor error:', error);

@@ -78,11 +78,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine media type
-    const resolvedMediaType = (mediaType || 'image/png') as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
-
     // Strip data URL prefix if present
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
+    const resolvedMediaType = mediaType || 'image/png';
+    const isPdf = resolvedMediaType === 'application/pdf';
+
+    // Build the content block — PDFs use 'document' type, images use 'image' type
+    const fileBlock = isPdf
+      ? {
+          type: 'document' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: 'application/pdf' as const,
+            data: base64Data,
+          },
+        }
+      : {
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: resolvedMediaType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+            data: base64Data,
+          },
+        };
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -91,14 +109,7 @@ export async function POST(request: NextRequest) {
         {
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: resolvedMediaType,
-                data: base64Data,
-              },
-            },
+            fileBlock,
             {
               type: 'text',
               text: prompt,
@@ -135,8 +146,9 @@ export async function POST(request: NextRequest) {
       data: parsed,
       raw: textContent.text,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('POST /api/advisor/parse-document error:', error);
-    return NextResponse.json({ error: 'Failed to parse document' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to parse document';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -127,6 +127,16 @@ function initializeSchema(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS conversation_summaries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_type TEXT NOT NULL DEFAULT 'general',
+      summary_json TEXT NOT NULL,
+      messages_start_id INTEGER NOT NULL,
+      messages_end_id INTEGER NOT NULL,
+      message_count INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS column_mappings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       institution TEXT NOT NULL,

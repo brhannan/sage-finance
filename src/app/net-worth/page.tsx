@@ -107,11 +107,14 @@ export default function NetWorthPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [nwRes, acctRes] = await Promise.all([
-        fetch("/api/dashboard/net-worth"),
+      const [metricsRes, acctRes] = await Promise.all([
+        fetch("/api/metrics"),
         fetch("/api/accounts"),
       ]);
-      if (nwRes.ok) setNetWorth(await nwRes.json());
+      if (metricsRes.ok) {
+        const m = await metricsRes.json();
+        setNetWorth(m.netWorth);
+      }
       if (acctRes.ok) setAccounts(await acctRes.json());
     } catch (err) {
       console.error("Failed to load net worth data:", err);

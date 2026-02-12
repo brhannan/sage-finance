@@ -89,7 +89,8 @@ export default function IncomePage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
-  const [, setParsedData] = useState<ParsedPaystub | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [parsedData, setParsedData] = useState<ParsedPaystub | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
 
   // Manual entry
@@ -131,17 +132,19 @@ export default function IncomePage() {
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = (reader.result as string).split(",")[1];
+        const mediaType = uploadFile.type || "image/png";
         const res = await fetch("/api/advisor/parse-document", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            type: "paystub",
-            file: base64,
-            filename: uploadFile.name,
+            documentType: "paystub",
+            image: base64,
+            mediaType,
           }),
         });
         if (res.ok) {
-          const data = await res.json();
+          const result = await res.json();
+          const data = result.data || result;
           setParsedData(data);
           // Pre-fill form with parsed data
           setForm({
@@ -165,6 +168,10 @@ export default function IncomePage() {
           setReviewMode(true);
           setUploadOpen(false);
           setManualOpen(true);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          console.error("Parse failed:", res.status, errData);
+          alert(`Parse failed: ${errData.error || res.statusText}`);
         }
         setParsing(false);
       };

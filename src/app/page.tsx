@@ -116,23 +116,20 @@ export default function HomePage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [nwRes, srRes, tsrRes, goalsRes, aiRes, catRes, acctRes] =
+      const [metricsRes, aiRes, catRes, acctRes] =
         await Promise.all([
-          fetch("/api/dashboard/net-worth"),
-          fetch("/api/dashboard/savings-rate"),
-          fetch("/api/dashboard/savings-rate?trailing=12"),
-          fetch("/api/goals"),
+          fetch("/api/metrics"),
           fetch("/api/action-items?status=pending&limit=5"),
           fetch("/api/categories"),
           fetch("/api/accounts"),
         ]);
 
-      if (nwRes.ok) setNetWorth(await nwRes.json());
-      if (srRes.ok) setSavingsRate(await srRes.json());
-      if (tsrRes.ok) setTrailingSavingsRate(await tsrRes.json());
-      if (goalsRes.ok) {
-        const data = await goalsRes.json();
-        setGoals(Array.isArray(data) ? data.slice(0, 3) : []);
+      if (metricsRes.ok) {
+        const m = await metricsRes.json();
+        setNetWorth(m.netWorth);
+        setSavingsRate(m.savingsRate);
+        setTrailingSavingsRate(m.trailingSavingsRate);
+        setGoals(Array.isArray(m.goalProgress) ? m.goalProgress.slice(0, 3) : []);
       }
       if (aiRes.ok) {
         const data = await aiRes.json();

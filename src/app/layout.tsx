@@ -16,7 +16,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "MyBudget — Personal Finance Dashboard",
+  title: "Sage Finance — Personal Finance Dashboard",
   description: "AI-powered personal finance tracking and advisory",
 };
 

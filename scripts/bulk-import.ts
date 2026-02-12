@@ -9,7 +9,7 @@ import Papa from 'papaparse';
 import Database from 'better-sqlite3';
 import crypto from 'crypto';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'mybudget.db');
+const DB_PATH = path.join(process.cwd(), 'data', 'sage-finance.db');
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');

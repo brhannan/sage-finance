@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       `  ${g.name} (${g.type}): $${g.current_amount.toLocaleString()} / $${g.target_amount.toLocaleString()} (${g.progress.toFixed(1)}%)`
     ).join('\n');
 
-    const systemPrompt = `You are a knowledgeable and supportive personal financial advisor for the MyBudget app. You help users understand their finances, set and achieve goals, and make smart financial decisions.
+    const systemPrompt = `You are a knowledgeable and supportive personal financial advisor for the Sage Finance app. You help users understand their finances, set and achieve goals, and make smart financial decisions.
 
 USER PROFILE:
 ${profileContext || 'No profile information set yet.'}

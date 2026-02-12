@@ -47,7 +47,7 @@ export function Nav() {
               href="/import"
               className="px-3 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
-              Import
+              Import CSV
             </Link>
           </div>
         </div>

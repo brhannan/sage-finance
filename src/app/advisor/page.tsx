@@ -8,9 +8,22 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+
+const MODEL_OPTIONS = [
+  { value: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5" },
+  { value: "claude-opus-4-6", label: "Opus 4.6" },
+  { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+] as const;
 
 interface Message {
   id: number;
@@ -22,6 +35,13 @@ interface Message {
 interface QuickStats {
   netWorth?: number;
   savingsRate?: number;
+}
+
+interface LastResponse {
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  cost?: number;
 }
 
 const fmt = (n: number) =>
@@ -39,8 +59,10 @@ export default function AdvisorPage() {
   const [sending, setSending] = useState(false);
   const [hasProfile, setHasProfile] = useState(true);
   const [quickStats, setQuickStats] = useState<QuickStats>({});
+  const [model, setModel] = useState(MODEL_OPTIONS[0].value);
+  const [lastResponse, setLastResponse] = useState<LastResponse>({});
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -51,11 +73,10 @@ export default function AdvisorPage() {
   const fetchHistory = useCallback(async () => {
     setLoading(true);
     try {
-      const [histRes, profileRes, nwRes, srRes] = await Promise.all([
-        fetch("/api/advisor/history"),
+      const [histRes, profileRes, metricsRes] = await Promise.all([
+        fetch("/api/advisor"),
         fetch("/api/advisor/profile"),
-        fetch("/api/dashboard/net-worth"),
-        fetch("/api/dashboard/savings-rate"),
+        fetch("/api/metrics"),
       ]);
 
       if (histRes.ok) {
@@ -66,20 +87,17 @@ export default function AdvisorPage() {
       if (profileRes.ok) {
         const profile = await profileRes.json();
         setHasProfile(
-          profile && Object.keys(profile).length > 0
+          profile?.profile && Object.keys(profile.profile).length > 0
         );
       } else {
         setHasProfile(false);
       }
 
       const stats: QuickStats = {};
-      if (nwRes.ok) {
-        const nw = await nwRes.json();
-        stats.netWorth = nw.total;
-      }
-      if (srRes.ok) {
-        const sr = await srRes.json();
-        stats.savingsRate = sr.rate;
+      if (metricsRes.ok) {
+        const m = await metricsRes.json();
+        stats.netWorth = m.netWorth?.total;
+        stats.savingsRate = m.savingsRate?.rate;
       }
       setQuickStats(stats);
     } catch (err) {
@@ -116,21 +134,25 @@ export default function AdvisorPage() {
       const res = await fetch("/api/advisor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ message: userMessage, model }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        if (data.messages) {
-          setMessages(data.messages);
-        } else if (data.reply) {
+        if (data.content) {
           const assistantMsg: Message = {
             id: Date.now() + 1,
             role: "assistant",
-            content: data.reply,
+            content: data.content,
             created_at: new Date().toISOString(),
           };
           setMessages((prev) => [...prev, assistantMsg]);
+          setLastResponse({
+            model: data.model,
+            inputTokens: data.usage?.input_tokens,
+            outputTokens: data.usage?.output_tokens,
+            cost: data.cost,
+          });
         }
       }
     } catch (err) {
@@ -149,11 +171,12 @@ export default function AdvisorPage() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       sendMessage();
     }
+    // Ctrl/Cmd+Enter: default behavior inserts newline in textarea
   };
 
   const startOnboarding = () => {
@@ -273,14 +296,27 @@ export default function AdvisorPage() {
           {/* Input Area */}
           <Separator />
           <div className="p-4 flex gap-2">
-            <Input
+            <Select value={model} onValueChange={setModel}>
+              <SelectTrigger className="w-[140px] shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODEL_OPTIONS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Textarea
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask your financial advisor..."
+              placeholder="Ask your financial advisor... (Ctrl+Enter for newline)"
               disabled={sending}
-              className="flex-1"
+              rows={1}
+              className="flex-1 resize-none overflow-y-auto max-h-[120px]"
             />
             <Button onClick={sendMessage} disabled={sending || !input.trim()}>
               {sending ? "Sending..." : "Send"}
@@ -315,6 +351,33 @@ export default function AdvisorPage() {
             </div>
           </CardContent>
         </Card>
+
+        {lastResponse.model && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Last Response</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs">
+              <div>
+                <p className="text-muted-foreground">Model</p>
+                <p className="font-mono">{lastResponse.model}</p>
+              </div>
+              <Separator />
+              <div>
+                <p className="text-muted-foreground">Tokens</p>
+                <p>
+                  {lastResponse.inputTokens?.toLocaleString()} in /{" "}
+                  {lastResponse.outputTokens?.toLocaleString()} out
+                </p>
+              </div>
+              <Separator />
+              <div>
+                <p className="text-muted-foreground">Cost</p>
+                <p>${lastResponse.cost?.toFixed(4)}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="pb-2">

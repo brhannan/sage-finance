@@ -31,6 +31,7 @@ interface Message {
   id: number;
   role: "user" | "assistant" | "system";
   content: string;
+  conversation_type?: string;
   created_at: string;
 }
 
@@ -383,7 +384,9 @@ export default function AdvisorPage() {
                       className={`max-w-[80%] rounded-lg px-4 py-3 ${
                         msg.role === "user"
                           ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
+                          : msg.conversation_type === "proactive"
+                            ? "bg-violet-50 border border-violet-200"
+                            : "bg-muted"
                       }`}
                     >
                       {msg.role === "assistant" ? (

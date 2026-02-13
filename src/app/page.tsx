@@ -119,6 +119,7 @@ export default function HomePage() {
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [insights, setInsights] = useState<InsightsData | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
+  const [pendingQuestionCount, setPendingQuestionCount] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,7 +177,14 @@ export default function HomePage() {
     setInsightsLoading(true);
     fetch("/api/insights")
       .then((res) => res.ok ? res.json() : null)
-      .then((data) => setInsights(data))
+      .then((data) => {
+        setInsights(data);
+        // After insights load, check for pending proactive questions
+        fetch("/api/advisor/questions?status=pending")
+          .then((res) => res.ok ? res.json() : [])
+          .then((questions) => setPendingQuestionCount(Array.isArray(questions) ? questions.length : 0))
+          .catch(() => {});
+      })
       .catch(() => {})
       .finally(() => setInsightsLoading(false));
   }, [fetchData]);
@@ -542,7 +550,7 @@ export default function HomePage() {
             </div>
           ) : insights ? (
             <div className="space-y-2.5">
-              <div className="flex items-start gap-2">
+              <div className="flex items-center gap-1.5 mb-1">
                 <svg
                   width="14"
                   height="14"
@@ -552,10 +560,13 @@ export default function HomePage() {
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="text-violet-500 shrink-0 mt-0.5"
+                  className="text-violet-500 shrink-0"
                 >
                   <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
                 </svg>
+                <span className="text-sm font-medium text-foreground">Recent Trends</span>
+              </div>
+              <div className="flex items-start gap-2 pl-[22px]">
                 <p className="text-sm text-foreground">{insights.summary}</p>
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-[22px] text-sm text-muted-foreground">
@@ -737,9 +748,14 @@ export default function HomePage() {
         <CardFooter>
           <Link
             href="/advisor"
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-primary hover:underline inline-flex items-center gap-2"
           >
             Open AI Advisor
+            {pendingQuestionCount > 0 && (
+              <Badge variant="destructive" className="text-xs px-1.5 py-0.5 min-w-[20px] justify-center">
+                {pendingQuestionCount}
+              </Badge>
+            )}
           </Link>
         </CardFooter>
       </Card>

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     const messages = db.prepare(`
       SELECT * FROM conversations
-      WHERE conversation_type = ?
+      WHERE conversation_type IN (?, 'proactive')
         AND created_at >= datetime('now', '-24 hours')
       ORDER BY created_at DESC
       LIMIT ?
@@ -59,6 +59,12 @@ export async function POST(request: NextRequest) {
       INSERT INTO conversations (role, content, conversation_type)
       VALUES ('user', ?, ?)
     `).run(message, convType);
+
+    // Auto-mark pending proactive questions as answered (user engagement clears badge)
+    db.prepare(`
+      UPDATE advisor_questions SET status = 'answered', answered_at = datetime('now')
+      WHERE status = 'pending'
+    `).run();
 
     // Load conversation summaries for context
     const summaries = db.prepare(`
@@ -113,6 +119,41 @@ export async function POST(request: NextRequest) {
       return `  [${a.type}] ${a.name}${inst}: ${bal}`;
     }).join('\n');
 
+    // Query known spending events for context
+    const spendingEvents = db.prepare(`
+      SELECT se.id, se.name, se.description, se.category, se.date_start, se.date_end,
+             se.total_amount, se.tags,
+             GROUP_CONCAT(te.transaction_id) as linked_txn_ids
+      FROM spending_events se
+      LEFT JOIN transaction_events te ON te.event_id = se.id
+      GROUP BY se.id
+      ORDER BY se.created_at DESC
+      LIMIT 15
+    `).all() as Array<{
+      id: number; name: string; description: string; category: string;
+      date_start: string; date_end: string; total_amount: number;
+      tags: string; linked_txn_ids: string | null;
+    }>;
+
+    const spendingEventsContext = spendingEvents.length > 0
+      ? spendingEvents.map(e => {
+          const txnIds = e.linked_txn_ids ? ` [txn IDs: ${e.linked_txn_ids}]` : '';
+          return `  - "${e.name}" (${e.category || '?'}, ${e.date_start || '?'}–${e.date_end || '?'}, $${e.total_amount?.toFixed(2) || '?'})${txnIds}: ${e.description || 'no description'}`;
+        }).join('\n')
+      : '';
+
+    // Query pending proactive questions for context
+    const pendingQuestions = db.prepare(`
+      SELECT question, context_json FROM advisor_questions WHERE status = 'pending'
+    `).all() as Array<{ question: string; context_json: string }>;
+
+    const pendingQuestionsContext = pendingQuestions.length > 0
+      ? pendingQuestions.map(q => {
+          const ctx = JSON.parse(q.context_json || '{}');
+          return `  - Question: "${q.question}" (Category: ${ctx.category || '?'}, This month: $${ctx.this_month_amount?.toFixed(2) || '?'}, Last month: $${ctx.last_month_amount?.toFixed(2) || '?'}, Transaction IDs: ${(ctx.transaction_ids || []).join(', ') || 'none'})`;
+        }).join('\n')
+      : '';
+
     const systemPrompt = `You are a knowledgeable and supportive personal financial advisor for the Sage Finance app. You help users understand their finances, set and achieve goals, and make smart financial decisions.
 
 USER PROFILE:
@@ -153,12 +194,25 @@ PROFILE MANAGEMENT:
 - Important profile fields: name, age, location, occupation, total_comp (total annual compensation), expected_bonus, filing_status, risk_tolerance, financial_goals
 - If KEY profile fields are missing (especially age, location, total_comp), naturally ask about 1-2 missing fields when relevant to the conversation — don't rapid-fire all questions at once.
 - When the user shares info like "I'm 32" or "I make 180k", immediately save it via save_profile.
-- For total_comp, ask about base salary + equity/RSU + bonus breakdown if the user mentions compensation.`;
+- For total_comp, ask about base salary + equity/RSU + bonus breakdown if the user mentions compensation.
+
+SPENDING EVENT TRACKING:
+- You have a save_spending_event tool. Use it when the user explains unusual spending (e.g., "that was a ski trip" or "I bought furniture for the new apartment").
+- Capture the event with a descriptive name, category, date range, estimated total amount, and link relevant transaction IDs if available.
+- This helps avoid re-asking about spending the user has already explained.
+${spendingEventsContext ? `
+KNOWN SPENDING EVENTS (reference these naturally when discussing the user's spending history):
+${spendingEventsContext}
+` : ''}${pendingQuestionsContext ? `
+PROACTIVE QUESTIONS YOU ASKED (the user may be responding to one of these — use the transaction IDs when calling save_spending_event):
+${pendingQuestionsContext}
+` : ''}`;
 
     // Get recent conversation history for context (reduced from 20 since summaries cover older history)
+    // Include proactive messages so the advisor knows what it previously asked
     const recentMessages = db.prepare(`
       SELECT role, content FROM conversations
-      WHERE conversation_type = ?
+      WHERE conversation_type IN (?, 'proactive')
       ORDER BY created_at DESC
       LIMIT 10
     `).all(convType) as Array<{ role: string; content: string }>;
@@ -173,21 +227,41 @@ PROFILE MANAGEMENT:
       }));
 
     // Define tools for Claude
-    const tools: Anthropic.Tool[] = [{
-      name: 'save_profile',
-      description: 'Save or update user profile information. Call this whenever the user shares personal or financial details like age, location, income, job title, etc.',
-      input_schema: {
-        type: 'object' as const,
-        properties: {
-          entries: {
-            type: 'object',
-            description: 'Key-value pairs to save. Keys should be snake_case (e.g., age, location, total_comp, expected_bonus, occupation, filing_status, risk_tolerance, financial_goals)',
-            additionalProperties: { type: 'string' },
-          }
+    const tools: Anthropic.Tool[] = [
+      {
+        name: 'save_profile',
+        description: 'Save or update user profile information. Call this whenever the user shares personal or financial details like age, location, income, job title, etc.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            entries: {
+              type: 'object',
+              description: 'Key-value pairs to save. Keys should be snake_case (e.g., age, location, total_comp, expected_bonus, occupation, filing_status, risk_tolerance, financial_goals)',
+              additionalProperties: { type: 'string' },
+            }
+          },
+          required: ['entries'],
         },
-        required: ['entries'],
       },
-    }];
+      {
+        name: 'save_spending_event',
+        description: 'Save a named spending event when the user explains unusual spending. This stores the explanation so the system won\'t ask about it again.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            name: { type: 'string', description: 'Short descriptive name for the event (e.g., "Ski trip to Vail", "New apartment furniture")' },
+            category: { type: 'string', description: 'Spending category this event falls under' },
+            description: { type: 'string', description: 'Brief description of the event' },
+            date_start: { type: 'string', description: 'Start date (YYYY-MM-DD format)' },
+            date_end: { type: 'string', description: 'End date (YYYY-MM-DD format)' },
+            total_amount: { type: 'number', description: 'Total amount spent on this event' },
+            tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags for categorization' },
+            transaction_ids: { type: 'array', items: { type: 'number' }, description: 'IDs of related transactions to link' },
+          },
+          required: ['name', 'category'],
+        },
+      },
+    ];
 
     // Call Claude with tool use loop
     let currentResponse = await anthropic.messages.create({
@@ -216,6 +290,43 @@ PROFILE MANAGEMENT:
             upsert.run(key, String(value));
           }
           toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Profile updated.' });
+        } else if (block.type === 'tool_use' && block.name === 'save_spending_event') {
+          const input = block.input as {
+            name: string; category: string; description?: string;
+            date_start?: string; date_end?: string; total_amount?: number;
+            tags?: string[]; transaction_ids?: number[];
+          };
+
+          const result = db.prepare(`
+            INSERT INTO spending_events (name, description, category, date_start, date_end, total_amount, tags, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'advisor')
+          `).run(
+            input.name,
+            input.description || null,
+            input.category,
+            input.date_start || null,
+            input.date_end || null,
+            input.total_amount || null,
+            input.tags ? JSON.stringify(input.tags) : null,
+          );
+
+          const eventId = result.lastInsertRowid;
+
+          // Link transactions to this event
+          if (input.transaction_ids && input.transaction_ids.length > 0) {
+            const linkStmt = db.prepare(`
+              INSERT OR IGNORE INTO transaction_events (transaction_id, event_id) VALUES (?, ?)
+            `);
+            for (const txnId of input.transaction_ids) {
+              linkStmt.run(txnId, eventId);
+            }
+          }
+
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: `Spending event "${input.name}" saved successfully${input.transaction_ids?.length ? ` with ${input.transaction_ids.length} linked transactions` : ''}.`,
+          });
         }
       }
 

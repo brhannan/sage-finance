@@ -7,6 +7,7 @@ import {
   getNetWorth,
   getSpendingByCategory,
   getGoalProgress,
+  getAccountBreakdown,
 } from '@/lib/metrics';
 
 const anthropic = new Anthropic();
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
     const netWorth = getNetWorth();
     const spending = getSpendingByCategory();
     const goals = getGoalProgress();
+    const accounts = getAccountBreakdown();
 
     const topSpending = spending.slice(0, 8).map(s =>
       `  ${s.name}: $${s.amount.toFixed(2)}${s.budget ? ` (budget: $${s.budget.toFixed(2)})` : ''}`
@@ -82,6 +84,12 @@ export async function POST(request: NextRequest) {
     const goalsContext = goals.map(g =>
       `  ${g.name} (${g.type}): $${g.current_amount.toLocaleString()} / $${g.target_amount.toLocaleString()} (${g.progress.toFixed(1)}%)`
     ).join('\n');
+
+    const accountsContext = accounts.map(a => {
+      const bal = a.balance != null ? `$${a.balance.toLocaleString()}` : 'no balance';
+      const inst = a.institution ? ` (${a.institution})` : '';
+      return `  [${a.type}] ${a.name}${inst}: ${bal}`;
+    }).join('\n');
 
     const systemPrompt = `You are a knowledgeable and supportive personal financial advisor for the Sage Finance app. You help users understand their finances, set and achieve goals, and make smart financial decisions.
 
@@ -92,6 +100,9 @@ CURRENT FINANCIAL SNAPSHOT:
 - This month's savings rate: ${savingsRate.rate}% (income: $${savingsRate.income.toLocaleString()}, expenses: $${savingsRate.expenses.toLocaleString()})
 - Trailing 12-month savings rate: ${trailingSavingsRate.rate}%
 - Net worth: $${netWorth.total.toLocaleString()} (assets: $${netWorth.assets.toLocaleString()}, liabilities: $${netWorth.liabilities.toLocaleString()})
+
+ACCOUNT BREAKDOWN:
+${accountsContext || '  No accounts set up yet.'}
 
 TOP SPENDING CATEGORIES THIS MONTH:
 ${topSpending || '  No spending data available.'}
@@ -108,7 +119,8 @@ GUIDELINES:
 - If asked about something you don't have data for, say so and suggest how they can add that data.
 - Be encouraging about progress and honest about areas for improvement.
 - When relevant, mention tax implications, compound interest effects, or opportunity costs.
-- Do not make up financial data. Only reference what is provided above.`;
+- Do not make up financial data. Only reference what is provided above.
+- IMPORTANT: Paychecks are typically recorded mid-month (around the 15th). If the current date is before the 16th, $0 income for the current month is completely normal and should NOT be flagged as a concern. Use trailing 12-month metrics instead when discussing current financial health.`;
 
     // Get recent conversation history for context (reduced from 20 since summaries cover older history)
     const recentMessages = db.prepare(`

@@ -76,3 +76,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+.glass-chart .recharts-wrapper,
+.glass-chart .recharts-surface {
+  background: transparent !important;
+}

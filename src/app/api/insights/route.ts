@@ -87,6 +87,7 @@ Rules:
   - Retirement & investment account analysis
   - Specific recommendations (numbered, actionable)
 - Do NOT mention incomplete monthly data in the short bullets—save detail for the report
+- IMPORTANT: Paychecks are typically recorded mid-month (around the 15th). If the current date is before the 16th, $0 income for the current month is COMPLETELY NORMAL—do NOT flag it as a concern, warning, or action item anywhere (summary, bullets, or report). Simply note the month is in progress if relevant, then move on. Focus on trailing 12-month metrics for current financial health.
 - Return ONLY valid JSON, no markdown code fences
 
 USER PROFILE:

@@ -119,7 +119,8 @@ GUIDELINES:
 - If asked about something you don't have data for, say so and suggest how they can add that data.
 - Be encouraging about progress and honest about areas for improvement.
 - When relevant, mention tax implications, compound interest effects, or opportunity costs.
-- Do not make up financial data. Only reference what is provided above.`;
+- Do not make up financial data. Only reference what is provided above.
+- IMPORTANT: Paychecks are typically recorded mid-month (around the 15th). If the current date is before the 16th, $0 income for the current month is completely normal and should NOT be flagged as a concern. Use trailing 12-month metrics instead when discussing current financial health.`;
 
     // Get recent conversation history for context (reduced from 20 since summaries cover older history)
     const recentMessages = db.prepare(`

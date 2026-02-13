@@ -4,10 +4,11 @@ export function getSavingsRate(month?: string): { rate: number; income: number; 
   const db = getDb();
   const targetMonth = month || new Date().toISOString().slice(0, 7);
 
+  // Use income_records (net_pay) as the source of truth for income
   const incomeResult = db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) as total
-    FROM transactions
-    WHERE type = 'income' AND strftime('%Y-%m', date) = ?
+    SELECT COALESCE(SUM(net_pay), 0) as total
+    FROM income_records
+    WHERE strftime('%Y-%m', date) = ?
   `).get(targetMonth) as { total: number };
 
   const expenseResult = db.prepare(`
@@ -29,9 +30,10 @@ export function getTrailingSavingsRate(months: number = 12): { rate: number; inc
   startDate.setMonth(startDate.getMonth() - months);
   const start = startDate.toISOString().slice(0, 10);
 
+  // Use income_records (net_pay) as the source of truth for income
   const incomeResult = db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) as total
-    FROM transactions WHERE type = 'income' AND date >= ?
+    SELECT COALESCE(SUM(net_pay), 0) as total
+    FROM income_records WHERE date >= ?
   `).get(start) as { total: number };
 
   const expenseResult = db.prepare(`
@@ -176,6 +178,44 @@ export function getFIProjection(config: {
     yearsToFI: Math.round((months / 12) * 10) / 10,
     fiDate: fiDate.toISOString().slice(0, 10),
   };
+}
+
+export function getMonthlyIncomeExpenseTrend(months: number = 6): Array<{
+  month: string;
+  income: number;
+  expenses: number;
+  savings: number;
+  savingsRate: number;
+}> {
+  const db = getDb();
+  const results: Array<{ month: string; income: number; expenses: number; savings: number; savingsRate: number }> = [];
+
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const monthStr = d.toISOString().slice(0, 7);
+
+    const incomeResult = db.prepare(`
+      SELECT COALESCE(SUM(net_pay), 0) as total
+      FROM income_records
+      WHERE strftime('%Y-%m', date) = ?
+    `).get(monthStr) as { total: number };
+
+    const expenseResult = db.prepare(`
+      SELECT COALESCE(SUM(ABS(amount)), 0) as total
+      FROM transactions
+      WHERE type = 'expense' AND strftime('%Y-%m', date) = ?
+    `).get(monthStr) as { total: number };
+
+    const income = incomeResult.total;
+    const expenses = expenseResult.total;
+    const savings = income - expenses;
+    const savingsRate = income > 0 ? Math.round(((income - expenses) / income) * 1000) / 10 : 0;
+
+    results.push({ month: monthStr, income, expenses, savings, savingsRate });
+  }
+
+  return results;
 }
 
 export function getHomeBuyingReadiness(config: {

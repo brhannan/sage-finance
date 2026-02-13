@@ -6,6 +6,7 @@ import {
   getSpendingByCategory,
   getMonthlySpendingTrend,
   getGoalProgress,
+  getMonthlyIncomeExpenseTrend,
 } from '@/lib/metrics';
 
 export async function GET(request: NextRequest) {
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
     const spendingByCategory = getSpendingByCategory(month);
     const monthlyTrend = getMonthlySpendingTrend();
     const goalProgress = getGoalProgress();
+    const incomeExpenseTrend = getMonthlyIncomeExpenseTrend();
 
     return NextResponse.json({
       savingsRate,
@@ -27,6 +29,7 @@ export async function GET(request: NextRequest) {
       spendingByCategory,
       monthlyTrend,
       goalProgress,
+      incomeExpenseTrend,
     });
   } catch (error) {
     console.error('GET /api/metrics error:', error);

@@ -174,7 +174,7 @@ function initializeSchema(db: Database.Database) {
       ('Travel', 'hotel,airbnb,airline,flight,vacation', '#D946EF'),
       ('Gifts & Donations', 'gift,donation,charity', '#FB923C'),
       ('Income', 'payroll,salary,deposit,direct dep', '#22C55E'),
-      ('Transfer', 'transfer,zelle,venmo,payment', '#94A3B8'),
+      ('Transfer', 'transfer,zelle,venmo,payment,journal,mobile payment,sell -,ira contrib', '#94A3B8'),
       ('Other', '', '#6B7280');
 
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);

@@ -36,6 +36,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   LineChart,
   Line,
+  ComposedChart,
+  Bar,
+  XAxis,
+  YAxis,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
@@ -61,6 +66,14 @@ interface GoalData {
   current_amount: number;
   target_date: string | null;
   progress: number;
+}
+
+interface IncomeExpenseTrendItem {
+  month: string;
+  income: number;
+  expenses: number;
+  savings: number;
+  savingsRate: number;
 }
 
 interface ActionItem {
@@ -94,11 +107,14 @@ export default function HomePage() {
   const [savingsRate, setSavingsRate] = useState<SavingsRateData | null>(null);
   const [trailingSavingsRate, setTrailingSavingsRate] =
     useState<SavingsRateData | null>(null);
+  const [incomeExpenseTrend, setIncomeExpenseTrend] = useState<IncomeExpenseTrendItem[]>([]);
   const [goals, setGoals] = useState<GoalData[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [chartOpen, setChartOpen] = useState(false);
 
   // Quick-add transaction state
   const [addOpen, setAddOpen] = useState(false);
@@ -130,6 +146,7 @@ export default function HomePage() {
         setSavingsRate(m.savingsRate);
         setTrailingSavingsRate(m.trailingSavingsRate);
         setGoals(Array.isArray(m.goalProgress) ? m.goalProgress.slice(0, 3) : []);
+        setIncomeExpenseTrend(Array.isArray(m.incomeExpenseTrend) ? m.incomeExpenseTrend : []);
       }
       if (aiRes.ok) {
         const data = await aiRes.json();
@@ -185,6 +202,12 @@ export default function HomePage() {
       setSubmitting(false);
     }
   };
+
+  const chartData = incomeExpenseTrend.map((d) => ({
+    ...d,
+    label: new Date(d.month + "-15").toLocaleString("en-US", { month: "short" }),
+    negExpenses: -d.expenses,
+  }));
 
   if (loading) {
     return (
@@ -380,7 +403,7 @@ export default function HomePage() {
         </Card>
 
         {/* Savings Rate */}
-        <Card>
+        <Card className="relative overflow-hidden">
           <CardHeader className="pb-2">
             <CardDescription>Savings Rate (This Month)</CardDescription>
             <CardTitle className="text-3xl">
@@ -420,6 +443,32 @@ export default function HomePage() {
               View spending
             </Link>
           </CardFooter>
+          {chartData.length > 0 && (
+            <div
+              className="absolute bottom-2 right-2 w-[100px] bg-white/60 backdrop-blur-sm rounded-md border border-white/40 p-1 cursor-pointer group hover:bg-white/80 transition-colors"
+              onClick={() => setChartOpen(true)}
+            >
+              <div className="h-[48px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={chartData}
+                    margin={{ top: 1, right: 1, left: 1, bottom: 1 }}
+                    barGap={-8}
+                  >
+                    <Bar dataKey="income" fill="#6BAF8D" radius={[1, 1, 0, 0]} />
+                    <Bar dataKey="negExpenses" fill="#E8927C" radius={[0, 0, 1, 1]} />
+                    <Line
+                      type="monotone"
+                      dataKey="savings"
+                      stroke="#3B82F6"
+                      strokeWidth={1}
+                      dot={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* Goals */}
@@ -466,6 +515,107 @@ export default function HomePage() {
           </CardFooter>
         </Card>
       </div>
+
+      {/* Cashflow Chart Dialog */}
+      <Dialog open={chartOpen} onOpenChange={setChartOpen}>
+        <DialogContent className="sm:max-w-[750px] backdrop-blur-md border-white/50" style={{ background: "rgba(255,255,255,0.4)" }}>
+          <DialogHeader>
+            <DialogTitle>Income vs Expenses</DialogTitle>
+          </DialogHeader>
+          {chartData.length > 0 && (
+            <div className="glass-chart h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={chartData}
+                  margin={{ top: 20, right: 12, left: 12, bottom: 0 }}
+                  barSize={60}
+                  barGap={-60}
+                >
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: "#6B7280" }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                    tickFormatter={(v: number) => {
+                      if (v === 0) return "$0";
+                      const abs = Math.abs(v);
+                      const label = abs >= 1000 ? `$${(abs / 1000).toFixed(abs % 1000 === 0 ? 0 : 1)}k` : `$${abs}`;
+                      return v < 0 ? `-${label}` : label;
+                    }}
+                    width={52}
+                  />
+                  <ReferenceLine y={0} stroke="#D1D5DB" strokeWidth={1} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0]?.payload as IncomeExpenseTrendItem & { label: string };
+                      if (!d) return null;
+                      return (
+                        <div className="bg-white border rounded-lg shadow-sm px-3 py-2 text-sm">
+                          <p className="font-medium mb-1">{d.label} {d.month.slice(0, 4)}</p>
+                          <p className="text-muted-foreground">Income: <span className="text-[#6BAF8D]">{fmt(d.income)}</span></p>
+                          <p className="text-muted-foreground">Expenses: <span className="text-[#E8927C]">{fmt(d.expenses)}</span></p>
+                          <p className="text-muted-foreground">
+                            Net: <span className={d.savings >= 0 ? "text-[#6BAF8D]" : "text-red-500"}>{fmt(d.savings)}</span>
+                          </p>
+                          {d.income > 0 && (
+                            <p className="text-muted-foreground">Savings rate: <span className="text-foreground">{d.savingsRate}%</span></p>
+                          )}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar
+                    dataKey="income"
+                    fill="#6BAF8D"
+                    radius={[3, 3, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="negExpenses"
+                    fill="#E8927C"
+                    radius={[0, 0, 3, 3]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="savings"
+                    stroke="#3B82F6"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: "#3B82F6", strokeWidth: 0 }}
+                    label={({ x, y, index }: { x?: string | number; y?: string | number; index?: number }) => {
+                      if (x == null || y == null || index == null) return null;
+                      const d = incomeExpenseTrend[index];
+                      if (!d || d.income <= 0) return null;
+                      const nx = Number(x), ny = Number(y);
+                      const fmtShort = (v: number) => {
+                        const abs = Math.abs(v);
+                        const s = abs >= 1000 ? `$${(abs / 1000).toFixed(1)}k` : `$${Math.round(abs)}`;
+                        return v < 0 ? `-${s}` : s;
+                      };
+                      return (
+                        <text
+                          x={nx}
+                          y={ny - 10}
+                          textAnchor="middle"
+                          fontSize={11}
+                          fill="#6B7280"
+                        >
+                          {fmtShort(d.savings)} ({d.savingsRate}%)
+                        </text>
+                      );
+                    }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Action Items */}
       <Card>

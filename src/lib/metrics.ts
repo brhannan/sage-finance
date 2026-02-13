@@ -51,12 +51,13 @@ export function getTrailingSavingsRate(months: number = 12): { rate: number; inc
 export function getNetWorth(): { total: number; assets: number; liabilities: number; history: Array<{ date: string; amount: number }> } {
   const db = getDb();
 
-  // Get latest balance for each account
+  // Get latest balance for each active account
   const latestBalances = db.prepare(`
     SELECT b.balance, a.type, a.name
     FROM balances b
     JOIN accounts a ON a.id = b.account_id
-    WHERE b.date = (SELECT MAX(b2.date) FROM balances b2 WHERE b2.account_id = b.account_id)
+    WHERE a.is_active = 1
+      AND b.date = (SELECT MAX(b2.date) FROM balances b2 WHERE b2.account_id = b.account_id)
   `).all() as Array<{ balance: number; type: string; name: string }>;
 
   let assets = 0;
@@ -76,7 +77,8 @@ export function getNetWorth(): { total: number; assets: number; liabilities: num
            SUM(CASE WHEN a.type IN ('credit_card', 'loan') THEN -ABS(b.balance) ELSE b.balance END) as amount
     FROM balances b
     JOIN accounts a ON a.id = b.account_id
-    WHERE b.date = (
+    WHERE a.is_active = 1
+      AND b.date = (
       SELECT MAX(b2.date) FROM balances b2
       WHERE b2.account_id = b.account_id
       AND strftime('%Y-%m', b2.date) = strftime('%Y-%m', b.date)
@@ -216,6 +218,27 @@ export function getMonthlyIncomeExpenseTrend(months: number = 6): Array<{
   }
 
   return results;
+}
+
+export function getAccountBreakdown(): Array<{ name: string; type: string; institution: string | null; balance: number; balance_date: string }> {
+  const db = getDb();
+  return db.prepare(`
+    SELECT a.name, a.type, a.institution, b.balance, b.date as balance_date
+    FROM accounts a
+    LEFT JOIN balances b ON b.account_id = a.id
+      AND b.date = (SELECT MAX(b2.date) FROM balances b2 WHERE b2.account_id = a.id)
+    WHERE a.is_active = 1
+    ORDER BY
+      CASE a.type
+        WHEN 'investment' THEN 1
+        WHEN 'savings' THEN 2
+        WHEN 'checking' THEN 3
+        WHEN 'other' THEN 4
+        WHEN 'credit_card' THEN 5
+        WHEN 'loan' THEN 6
+      END,
+      b.balance DESC
+  `).all() as Array<{ name: string; type: string; institution: string | null; balance: number; balance_date: string }>;
 }
 
 export function getHomeBuyingReadiness(config: {

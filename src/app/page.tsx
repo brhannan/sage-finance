@@ -76,6 +76,13 @@ interface IncomeExpenseTrendItem {
   savingsRate: number;
 }
 
+interface InsightsData {
+  summary: string;
+  going_well: string[];
+  to_improve: string[];
+  detailed_report?: string;
+}
+
 interface ActionItem {
   id: number;
   title: string;
@@ -110,6 +117,8 @@ export default function HomePage() {
   const [incomeExpenseTrend, setIncomeExpenseTrend] = useState<IncomeExpenseTrendItem[]>([]);
   const [goals, setGoals] = useState<GoalData[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [insights, setInsights] = useState<InsightsData | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,6 +172,13 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchData();
+    // Fetch insights separately so dashboard isn't blocked
+    setInsightsLoading(true);
+    fetch("/api/insights")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => setInsights(data))
+      .catch(() => {})
+      .finally(() => setInsightsLoading(false));
   }, [fetchData]);
 
   const handleAddTransaction = async () => {
@@ -515,6 +531,62 @@ export default function HomePage() {
           </CardFooter>
         </Card>
       </div>
+
+      {/* AI Insights */}
+      <Card>
+        <CardContent className="pt-4 pb-3">
+          {insightsLoading ? (
+            <div className="space-y-2 animate-pulse">
+              <div className="h-4 bg-muted rounded w-2/3" />
+              <div className="h-3 bg-muted rounded w-1/2" />
+            </div>
+          ) : insights ? (
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-violet-500 shrink-0 mt-0.5"
+                >
+                  <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
+                </svg>
+                <p className="text-sm text-foreground">{insights.summary}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-[22px] text-sm text-muted-foreground">
+                {insights.going_well.map((item, i) => (
+                  <span key={`g${i}`}>
+                    <span className="text-green-500">&#x2713;</span> {item}
+                  </span>
+                ))}
+                {insights.to_improve.map((item, i) => (
+                  <span key={`i${i}`}>
+                    <span className="text-amber-500">&#x25B8;</span> {item}
+                  </span>
+                ))}
+                <Link
+                  href="/insights"
+                  className="text-violet-600 hover:text-violet-700 font-medium"
+                >
+                  Full report &rarr;
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Unable to load insights.{" "}
+              <Link href="/advisor" className="text-primary hover:underline">
+                Chat with your advisor
+              </Link>
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Cashflow Chart Dialog */}
       <Dialog open={chartOpen} onOpenChange={setChartOpen}>

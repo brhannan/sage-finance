@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { autoCategorize, getImportHash } from '@/lib/categorize';
+import { autoCategorize, getImportHash, normalizeDate } from '@/lib/categorize';
 
 interface ColumnMapping {
   date: string;
@@ -43,6 +43,17 @@ export async function POST(request: NextRequest) {
     `);
 
     const checkHash = db.prepare('SELECT id FROM transactions WHERE import_hash = ?');
+    const checkDateAmount = db.prepare(
+      'SELECT id FROM transactions WHERE date = ? AND amount = ? AND account_id = ?'
+    );
+
+    const checkIncomeRecord = db.prepare(
+      'SELECT id FROM income_records WHERE date = ? AND ABS(net_pay - ?) < 0.01'
+    );
+    const insertIncomeRecord = db.prepare(`
+      INSERT INTO income_records (date, gross_pay, net_pay, employer, source)
+      VALUES (?, ?, ?, ?, 'import')
+    `);
 
     let imported = 0;
     let duplicates = 0;
@@ -83,29 +94,49 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          // Determine type
+          // Auto-categorize
+          const categoryId = autoCategorize(description);
+          const catName = categoryId
+            ? (db.prepare('SELECT name FROM categories WHERE id = ?').get(categoryId) as { name: string } | undefined)?.name
+            : undefined;
+
+          // Determine type — Transfer category overrides amount-based detection
           let type = 'expense';
-          if (mapping.type && row[mapping.type]) {
+          if (catName === 'Transfer') {
+            type = 'transfer';
+          } else if (mapping.type && row[mapping.type]) {
             type = row[mapping.type].toLowerCase();
           } else if (amount > 0) {
             type = 'income';
           }
 
-          // Auto-categorize
-          const categoryId = autoCategorize(description);
-
           // Generate import hash for deduplication
           const importHash = getImportHash(date, amount, description, accountId);
 
-          // Check for duplicate
+          // Check for duplicate (hash match)
           const existing = checkHash.get(importHash);
           if (existing) {
             duplicates++;
             continue;
           }
 
+          // Secondary dedup: same date + amount + account (catches cross-format duplicates)
+          const existingByDateAmount = checkDateAmount.get(date, amount, accountId);
+          if (existingByDateAmount) {
+            duplicates++;
+            continue;
+          }
+
           insertStmt.run(date, amount, description, categoryId, accountId, type, importHash);
           imported++;
+
+          // Auto-create income_records entry for paycheck/salary transactions
+          if (catName === 'Income' && amount > 0) {
+            const existingIncome = checkIncomeRecord.get(date, amount);
+            if (!existingIncome) {
+              insertIncomeRecord.run(date, amount, amount, description);
+            }
+          }
         } catch (err) {
           errors.push(`Row ${i + 1}: ${err instanceof Error ? err.message : 'unknown error'}`);
         }
@@ -121,29 +152,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function normalizeDate(dateStr: string): string | null {
-  // Try YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr;
-  }
-
-  // Try MM/DD/YYYY or M/D/YYYY
-  const slashMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (slashMatch) {
-    const month = slashMatch[1].padStart(2, '0');
-    const day = slashMatch[2].padStart(2, '0');
-    let year = slashMatch[3];
-    if (year.length === 2) {
-      year = (parseInt(year) > 50 ? '19' : '20') + year;
-    }
-    return `${year}-${month}-${day}`;
-  }
-
-  // Try parsing with Date constructor as fallback
-  const parsed = new Date(dateStr);
-  if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
-  }
-
-  return null;
-}

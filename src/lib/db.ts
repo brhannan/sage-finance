@@ -1,18 +1,57 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
+import { seedDemoData } from './demo-seed';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'sage-finance.db');
+const REAL_DB_PATH = path.join(process.cwd(), 'data', 'sage-finance.db');
+const DEMO_DB_PATH = path.join(process.cwd(), 'data', 'demo.db');
 
-let db: Database.Database | null = null;
+let realDb: Database.Database | null = null;
+let demoDb: Database.Database | null = null;
+let currentMode: 'real' | 'demo' = 'real';
 
 export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initializeSchema(db);
+  if (currentMode === 'demo') {
+    if (!demoDb) {
+      demoDb = new Database(DEMO_DB_PATH);
+      demoDb.pragma('journal_mode = WAL');
+      demoDb.pragma('foreign_keys = ON');
+      initializeSchema(demoDb);
+      seedDemoData(demoDb);
+    }
+    return demoDb;
   }
-  return db;
+
+  if (!realDb) {
+    realDb = new Database(REAL_DB_PATH);
+    realDb.pragma('journal_mode = WAL');
+    realDb.pragma('foreign_keys = ON');
+    initializeSchema(realDb);
+  }
+  return realDb;
+}
+
+export function setDemoMode(demo: boolean) {
+  currentMode = demo ? 'demo' : 'real';
+}
+
+export function isDemoMode(): boolean {
+  return currentMode === 'demo';
+}
+
+export function resetDemoDb() {
+  if (demoDb) {
+    demoDb.close();
+    demoDb = null;
+  }
+  if (fs.existsSync(DEMO_DB_PATH)) {
+    fs.unlinkSync(DEMO_DB_PATH);
+  }
+  // Also clean up WAL/SHM files
+  for (const suffix of ['-wal', '-shm']) {
+    const p = DEMO_DB_PATH + suffix;
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
 }
 
 function initializeSchema(db: Database.Database) {

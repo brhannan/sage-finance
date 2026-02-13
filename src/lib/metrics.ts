@@ -102,9 +102,19 @@ export function getSpendingByCategory(month?: string): Array<{ name: string; amo
       AND t.type = 'expense'
     WHERE c.name NOT IN ('Income', 'Transfer')
     GROUP BY c.id
-    HAVING amount > 0
+    HAVING COALESCE(SUM(ABS(t.amount)), 0) > 0
+
+    UNION ALL
+
+    SELECT 'Uncategorized' as name, COALESCE(SUM(ABS(amount)), 0) as amount, NULL as budget, '#9CA3AF' as color
+    FROM transactions
+    WHERE category_id IS NULL
+      AND type = 'expense'
+      AND strftime('%Y-%m', date) = ?
+    HAVING COALESCE(SUM(ABS(amount)), 0) > 0
+
     ORDER BY amount DESC
-  `).all(targetMonth) as Array<{ name: string; amount: number; budget: number | null; color: string }>;
+  `).all(targetMonth, targetMonth) as Array<{ name: string; amount: number; budget: number | null; color: string }>;
 }
 
 export function getMonthlySpendingTrend(months: number = 6): Array<{ month: string; categories: Record<string, number>; total: number }> {
@@ -122,7 +132,16 @@ export function getMonthlySpendingTrend(months: number = 6): Array<{ month: stri
       JOIN transactions t ON t.category_id = c.id
       WHERE strftime('%Y-%m', t.date) = ? AND t.type = 'expense'
       GROUP BY c.id
-    `).all(monthStr) as Array<{ name: string; amount: number }>;
+
+      UNION ALL
+
+      SELECT 'Uncategorized' as name, COALESCE(SUM(ABS(amount)), 0) as amount
+      FROM transactions
+      WHERE category_id IS NULL
+        AND type = 'expense'
+        AND strftime('%Y-%m', date) = ?
+      HAVING COALESCE(SUM(ABS(amount)), 0) > 0
+    `).all(monthStr, monthStr) as Array<{ name: string; amount: number }>;
 
     const categories: Record<string, number> = {};
     let total = 0;

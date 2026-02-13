@@ -9,19 +9,21 @@ import {
   getAccountBreakdown,
   getMonthlyIncomeExpenseTrend,
 } from '@/lib/metrics';
-import { getDb } from '@/lib/db';
+import { getDb, isDemoMode } from '@/lib/db';
 
 const anthropic = new Anthropic();
 
-// Simple in-memory cache: regenerate at most once per hour
-let cachedInsights: { data: unknown; generatedAt: number } | null = null;
+// Simple in-memory cache: regenerate at most once per hour, keyed by mode
+const cachedInsights: Record<string, { data: unknown; generatedAt: number }> = {};
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 export async function GET() {
   try {
+    const cacheKey = isDemoMode() ? 'demo' : 'real';
+
     // Return cached if fresh
-    if (cachedInsights && Date.now() - cachedInsights.generatedAt < CACHE_TTL_MS) {
-      return NextResponse.json(cachedInsights.data);
+    if (cachedInsights[cacheKey] && Date.now() - cachedInsights[cacheKey].generatedAt < CACHE_TTL_MS) {
+      return NextResponse.json(cachedInsights[cacheKey].data);
     }
 
     const db = getDb();
@@ -140,7 +142,7 @@ Today's date: ${new Date().toISOString().slice(0, 10)}`;
 
     const insights = JSON.parse(text);
 
-    cachedInsights = { data: insights, generatedAt: Date.now() };
+    cachedInsights[cacheKey] = { data: insights, generatedAt: Date.now() };
 
     return NextResponse.json(insights);
   } catch (error) {

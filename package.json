@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest"
+    "test": "vitest",
+    "test:ci": "vitest run --coverage --reporter=junit --outputFile=test-results/junit.xml",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
@@ -46,6 +48,7 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
     "postcss": "^8",

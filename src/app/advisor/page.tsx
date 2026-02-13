@@ -59,7 +59,7 @@ export default function AdvisorPage() {
   const [sending, setSending] = useState(false);
   const [hasProfile, setHasProfile] = useState(true);
   const [quickStats, setQuickStats] = useState<QuickStats>({});
-  const [model, setModel] = useState(MODEL_OPTIONS[0].value);
+  const [model, setModel] = useState<string>(MODEL_OPTIONS[0].value);
   const [lastResponse, setLastResponse] = useState<LastResponse>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);

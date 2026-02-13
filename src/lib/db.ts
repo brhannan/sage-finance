@@ -196,6 +196,46 @@ function initializeSchema(db: Database.Database) {
       completed_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS insights_cache (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      cache_key TEXT NOT NULL,
+      data TEXT NOT NULL,
+      generated_at INTEGER NOT NULL,
+      data_hash TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS advisor_questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      question TEXT NOT NULL,
+      context_json TEXT, -- JSON with category, amounts, transaction_ids
+      conversation_id INTEGER REFERENCES conversations(id),
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'answered', 'dismissed')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      answered_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS spending_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      category TEXT,
+      date_start TEXT,
+      date_end TEXT,
+      total_amount REAL,
+      tags TEXT, -- JSON array
+      source TEXT DEFAULT 'advisor',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS transaction_events (
+      transaction_id INTEGER NOT NULL REFERENCES transactions(id),
+      event_id INTEGER NOT NULL REFERENCES spending_events(id),
+      PRIMARY KEY (transaction_id, event_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_advisor_questions_status ON advisor_questions(status);
+    CREATE INDEX IF NOT EXISTS idx_spending_events_dates ON spending_events(date_start, date_end);
+
     -- Seed default categories if empty
     INSERT OR IGNORE INTO categories (name, keywords, color) VALUES
       ('Housing', 'rent,mortgage,hoa', '#3B82F6'),

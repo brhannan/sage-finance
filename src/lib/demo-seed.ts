@@ -84,7 +84,6 @@ export function seedDemoData(db: Database.Database) {
     let bal = balanceSeeds[accId].start;
     for (let mi = 0; mi < 12; mi++) {
       const year = mi < 10 ? 2025 : 2026;
-      const month = ((3 + mi - 1) % 12) + 1; // Mar=3..Dec=12, Jan=1, Feb=2
       const day = 28; // end of month snapshot
       const actualMonth = mi < 10 ? 3 + mi : mi - 9; // 3..12 then 1,2
       insertBalance.run(accId, dateStr(year, actualMonth, day), round2(bal));

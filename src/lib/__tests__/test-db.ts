@@ -98,6 +98,7 @@ export function createTestDb(): Database.Database {
       target_date TEXT,
       description TEXT,
       config TEXT,
+      account_id INTEGER REFERENCES accounts(id),
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))

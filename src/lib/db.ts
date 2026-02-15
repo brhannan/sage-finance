@@ -145,6 +145,7 @@ function initializeSchema(db: Database.Database) {
       target_date TEXT,
       description TEXT,
       config TEXT, -- JSON for type-specific config
+      account_id INTEGER REFERENCES accounts(id),
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -290,5 +291,12 @@ function initializeSchema(db: Database.Database) {
       WHERE (${orClauses})
         AND (category_id IS NULL OR category_id != ?)
     `).run(transportCat.id, ...gasPatterns, transportCat.id);
+  }
+
+  // Migration: add account_id to goals if it doesn't exist
+  try {
+    db.prepare("SELECT account_id FROM goals LIMIT 1").get();
+  } catch {
+    db.exec("ALTER TABLE goals ADD COLUMN account_id INTEGER REFERENCES accounts(id)");
   }
 }

@@ -191,10 +191,10 @@ export function createTestDb(): Database.Database {
 
     INSERT OR IGNORE INTO categories (name, keywords, color) VALUES
       ('Housing', 'rent,mortgage,hoa', '#3B82F6'),
-      ('Utilities', 'electric,gas,water,internet,phone,utility', '#8B5CF6'),
+      ('Utilities', 'electric,water,internet,phone,utility,pse,puget sound energy,xfinity,comcast,centurylink,t-mobile,verizon,at&t', '#8B5CF6'),
       ('Groceries', 'grocery,groceries,whole foods,trader joe,safeway,kroger,publix,aldi', '#10B981'),
       ('Dining', 'restaurant,doordash,uber eats,grubhub,starbucks,coffee,mcdonald,chipotle', '#F59E0B'),
-      ('Transportation', 'gas,fuel,uber,lyft,parking,transit,metro', '#EF4444'),
+      ('Transportation', 'gas,fuel,uber,lyft,parking,transit,metro,shell oil,chevron,exxon,mobil,arco,costco gas,bp#,sunoco,valero,speedway,marathon petro,wawa,circle k,phillips 66,76 ,casey,qt ,quiktrip,racetrac,pilot,flying j,love s,sheetz,kwik trip,good to go,orca,toll', '#EF4444'),
       ('Shopping', 'amazon,target,walmart,costco,best buy', '#EC4899'),
       ('Entertainment', 'netflix,spotify,hulu,disney,movie,concert,gaming', '#6366F1'),
       ('Healthcare', 'doctor,pharmacy,cvs,walgreens,medical,dental,hospital', '#14B8A6'),

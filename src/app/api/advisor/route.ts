@@ -8,6 +8,7 @@ import {
   getSpendingByCategory,
   getGoalProgress,
   getAccountBreakdown,
+  getMonthlyIncomeExpenseTrend,
 } from '@/lib/metrics';
 
 const anthropic = new Anthropic();
@@ -85,7 +86,57 @@ export async function POST(request: NextRequest) {
     const accounts = getAccountBreakdown();
 
     // Compute average monthly income from trailing data for context
-    const avgMonthlyIncome = trailingSavingsRate.income / 12;
+    // Use actual months with income data, not a flat 12, to avoid underestimating when data < 12 months
+    const incomeMonths = trailingSavingsRate.monthsWithIncome || 1;
+    const avgMonthlyIncome = trailingSavingsRate.income / incomeMonths;
+
+    // Recent paycheck details (deductions, taxes, retirement contributions)
+    const recentPaychecks = db.prepare(`
+      SELECT date, gross_pay, net_pay, federal_tax, state_tax, social_security, medicare,
+             retirement_401k, health_insurance, dental_insurance, vision_insurance, hsa,
+             other_deductions, other_deductions_detail, employer, pay_period_start, pay_period_end
+      FROM income_records
+      ORDER BY date DESC
+      LIMIT 6
+    `).all() as Array<{
+      date: string; gross_pay: number; net_pay: number;
+      federal_tax: number | null; state_tax: number | null;
+      social_security: number | null; medicare: number | null;
+      retirement_401k: number | null; health_insurance: number | null;
+      dental_insurance: number | null; vision_insurance: number | null;
+      hsa: number | null; other_deductions: number | null;
+      other_deductions_detail: string | null; employer: string | null;
+      pay_period_start: string | null; pay_period_end: string | null;
+    }>;
+
+    const paycheckContext = recentPaychecks.map(p => {
+      const deductions: string[] = [];
+      if (p.federal_tax) deductions.push(`federal tax: $${p.federal_tax.toFixed(2)}`);
+      if (p.state_tax) deductions.push(`state tax: $${p.state_tax.toFixed(2)}`);
+      if (p.social_security) deductions.push(`social security: $${p.social_security.toFixed(2)}`);
+      if (p.medicare) deductions.push(`medicare: $${p.medicare.toFixed(2)}`);
+      if (p.retirement_401k) deductions.push(`401k: $${p.retirement_401k.toFixed(2)}`);
+      if (p.health_insurance) deductions.push(`health ins: $${p.health_insurance.toFixed(2)}`);
+      if (p.dental_insurance) deductions.push(`dental: $${p.dental_insurance.toFixed(2)}`);
+      if (p.vision_insurance) deductions.push(`vision: $${p.vision_insurance.toFixed(2)}`);
+      if (p.hsa) deductions.push(`HSA: $${p.hsa.toFixed(2)}`);
+      if (p.other_deductions) {
+        let detail = '';
+        if (p.other_deductions_detail) {
+          try { detail = ` (${Object.entries(JSON.parse(p.other_deductions_detail)).map(([k,v]) => `${k}: $${Number(v).toFixed(2)}`).join(', ')})`; } catch {}
+        }
+        deductions.push(`other: $${p.other_deductions.toFixed(2)}${detail}`);
+      }
+      const period = p.pay_period_start && p.pay_period_end ? ` (${p.pay_period_start} to ${p.pay_period_end})` : '';
+      const emp = p.employer ? ` [${p.employer}]` : '';
+      return `  ${p.date}${period}${emp}: gross $${p.gross_pay.toFixed(2)} → net $${p.net_pay.toFixed(2)}${deductions.length > 0 ? `\n    Deductions: ${deductions.join(', ')}` : ''}`;
+    }).join('\n');
+
+    // 12-month income/expense trend for historical context
+    const trend = getMonthlyIncomeExpenseTrend(12);
+    const trendContext = trend.map(t =>
+      `  ${t.month}: income=$${t.income.toLocaleString()}, expenses=$${t.expenses.toLocaleString()}, savings=$${t.savings.toLocaleString()} (${t.savingsRate}%)`
+    ).join('\n');
 
     const topSpending = spending.slice(0, 10).map(s =>
       `  ${s.name}: $${s.amount.toFixed(2)}${s.budget ? ` (budget: $${s.budget.toFixed(2)})` : ''}`
@@ -161,9 +212,15 @@ ${profileContext || 'No profile information set yet.'}
 
 CURRENT FINANCIAL SNAPSHOT:
 - This month so far (PARTIAL — may not include all paychecks yet): income recorded: $${savingsRate.income.toLocaleString()}, expenses: $${savingsRate.expenses.toLocaleString()}
-- Average monthly net income (trailing 12 months): $${Math.round(avgMonthlyIncome).toLocaleString()}
+- Average monthly net income (based on ${incomeMonths} month${incomeMonths !== 1 ? 's' : ''} of data): $${Math.round(avgMonthlyIncome).toLocaleString()}
 - Trailing 12-month totals: income $${trailingSavingsRate.income.toLocaleString()}, expenses $${trailingSavingsRate.expenses.toLocaleString()}, savings rate ${trailingSavingsRate.rate}%
 - Net worth: $${netWorth.total.toLocaleString()} (assets: $${netWorth.assets.toLocaleString()}, liabilities: $${netWorth.liabilities.toLocaleString()})
+
+RECENT PAYCHECKS & DEDUCTIONS:
+${paycheckContext || '  No paycheck records available.'}
+
+12-MONTH INCOME/EXPENSE TREND:
+${trendContext}
 
 ACCOUNT BREAKDOWN:
 ${accountsContext || '  No accounts set up yet.'}
@@ -187,6 +244,7 @@ GUIDELINES:
 - Be encouraging about progress and honest about areas for improvement.
 - When relevant, mention tax implications, compound interest effects, or opportunity costs.
 - Do not make up financial data. Only reference what is provided above.
+- TRANSACTION LOOKUP: You have a search_transactions tool. When the user asks about specific charges, past months, or transactions outside your recent 30-day window, USE IT to look them up. Never say you don't have access to older data — search for it instead. You can search by date range, amount, description, category, or account.
 - CRITICAL INCOME NOTE: The "this month so far" income figure is PARTIAL — it only reflects paychecks recorded so far this month, NOT full monthly income. The user is typically paid twice per month. NEVER treat a single paycheck as the user's monthly income. Always use the "average monthly net income (trailing 12 months)" figure when discussing monthly take-home pay, budgeting, or savings potential. If current month income is $0 or seems low, that's normal — paychecks may not have been recorded yet.
 
 PROFILE MANAGEMENT:
@@ -195,6 +253,12 @@ PROFILE MANAGEMENT:
 - If KEY profile fields are missing (especially age, location, total_comp), naturally ask about 1-2 missing fields when relevant to the conversation — don't rapid-fire all questions at once.
 - When the user shares info like "I'm 32" or "I make 180k", immediately save it via save_profile.
 - For total_comp, ask about base salary + equity/RSU + bonus breakdown if the user mentions compensation.
+
+FOLLOW-UP QUESTIONS:
+- You have a save_followup tool. Use it whenever you ask the user an important question they haven't answered yet.
+- Examples: HSA contribution details, employer 401k match, insurance coverage, tax filing specifics, benefit elections.
+- This saves the question so you'll see it in future conversations and can circle back to it.
+- Do NOT save trivial or rhetorical questions — only ones where the answer would meaningfully improve your financial advice.
 
 SPENDING EVENT TRACKING:
 - You have a save_spending_event tool. Use it when the user explains unusual spending (e.g., "that was a ski trip" or "I bought furniture for the new apartment").
@@ -244,6 +308,24 @@ ${pendingQuestionsContext}
         },
       },
       {
+        name: 'search_transactions',
+        description: 'Search the user\'s full transaction history. Use this to look up specific charges, find transactions in past months, investigate unusual spending, or answer questions about historical transactions. Returns up to 20 matching transactions.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            date_from: { type: 'string', description: 'Start date (YYYY-MM-DD). Defaults to 1 year ago if not specified.' },
+            date_to: { type: 'string', description: 'End date (YYYY-MM-DD). Defaults to today if not specified.' },
+            min_amount: { type: 'number', description: 'Minimum absolute amount to filter by' },
+            max_amount: { type: 'number', description: 'Maximum absolute amount to filter by' },
+            description: { type: 'string', description: 'Search term to match against transaction descriptions (partial match, case-insensitive)' },
+            category: { type: 'string', description: 'Category name to filter by (exact match)' },
+            account: { type: 'string', description: 'Account name to filter by (partial match)' },
+            type: { type: 'string', enum: ['expense', 'income'], description: 'Transaction type filter' },
+          },
+          required: [],
+        },
+      },
+      {
         name: 'save_spending_event',
         description: 'Save a named spending event when the user explains unusual spending. This stores the explanation so the system won\'t ask about it again.',
         input_schema: {
@@ -261,25 +343,78 @@ ${pendingQuestionsContext}
           required: ['name', 'category'],
         },
       },
+      {
+        name: 'save_followup',
+        description: 'Save an important follow-up question to ask the user later. Use this when you ask the user a question about their finances that they haven\'t answered yet — especially about account details, contribution amounts, employer benefits, insurance, or other information that would improve your advice. The question will appear in your context in future conversations so you can circle back to it.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            question: { type: 'string', description: 'The follow-up question you want to ask later' },
+            context: { type: 'string', description: 'Brief context for why this question matters (e.g., "Need to know HSA contribution to calculate true savings rate")' },
+            category: { type: 'string', description: 'Topic category (e.g., "retirement", "insurance", "taxes", "savings", "benefits")' },
+          },
+          required: ['question'],
+        },
+      },
     ];
 
-    // Call Claude with tool use loop
-    let currentResponse = await anthropic.messages.create({
-      model: selectedModel,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: conversationMessages,
-      tools,
-    });
-
-    let totalInputTokens = currentResponse.usage.input_tokens;
-    let totalOutputTokens = currentResponse.usage.output_tokens;
-
-    // Process tool calls until Claude stops using tools
-    while (currentResponse.stop_reason === 'tool_use') {
+    // Helper: execute tool calls and return results
+    const executeTools = (content: Anthropic.ContentBlock[]): Anthropic.ToolResultBlockParam[] => {
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
-      for (const block of currentResponse.content) {
-        if (block.type === 'tool_use' && block.name === 'save_profile') {
+      for (const block of content) {
+        if (block.type !== 'tool_use') continue;
+
+        if (block.name === 'search_transactions') {
+          const input = block.input as {
+            date_from?: string; date_to?: string;
+            min_amount?: number; max_amount?: number;
+            description?: string; category?: string;
+            account?: string; type?: string;
+          };
+
+          const conditions: string[] = [];
+          const params: (string | number)[] = [];
+
+          const dateFrom = input.date_from || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const dateTo = input.date_to || new Date().toISOString().slice(0, 10);
+          conditions.push('t.date >= ? AND t.date <= ?');
+          params.push(dateFrom, dateTo);
+
+          if (input.min_amount != null) { conditions.push('ABS(t.amount) >= ?'); params.push(input.min_amount); }
+          if (input.max_amount != null) { conditions.push('ABS(t.amount) <= ?'); params.push(input.max_amount); }
+          if (input.description) { conditions.push('LOWER(t.description) LIKE ?'); params.push(`%${input.description.toLowerCase()}%`); }
+          if (input.category) { conditions.push('c.name = ?'); params.push(input.category); }
+          if (input.account) { conditions.push('LOWER(a.name) LIKE ?'); params.push(`%${input.account.toLowerCase()}%`); }
+          if (input.type) { conditions.push('t.type = ?'); params.push(input.type); }
+
+          const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+          const results = db.prepare(`
+            SELECT t.id, t.date, t.amount, t.description, t.type,
+                   COALESCE(c.name, 'Uncategorized') as category,
+                   a.name as account
+            FROM transactions t
+            LEFT JOIN categories c ON c.id = t.category_id
+            LEFT JOIN accounts a ON a.id = t.account_id
+            ${whereClause}
+            ORDER BY ABS(t.amount) DESC, t.date DESC
+            LIMIT 20
+          `).all(...params) as Array<{
+            id: number; date: string; amount: number; description: string;
+            type: string; category: string; account: string;
+          }>;
+
+          const resultText = results.length > 0
+            ? results.map(t =>
+                `  ID:${t.id} | ${t.date} | $${Math.abs(t.amount).toFixed(2)} | ${t.description} | ${t.category} | ${t.account} | ${t.type}`
+              ).join('\n')
+            : '  No matching transactions found.';
+
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: `Found ${results.length} transaction(s):\n${resultText}`,
+          });
+        } else if (block.name === 'save_profile') {
           const { entries } = block.input as { entries: Record<string, string> };
           const upsert = db.prepare(`
             INSERT INTO advisor_profile (key, value, updated_at)
@@ -290,7 +425,7 @@ ${pendingQuestionsContext}
             upsert.run(key, String(value));
           }
           toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Profile updated.' });
-        } else if (block.type === 'tool_use' && block.name === 'save_spending_event') {
+        } else if (block.name === 'save_spending_event') {
           const input = block.input as {
             name: string; category: string; description?: string;
             date_start?: string; date_end?: string; total_amount?: number;
@@ -311,8 +446,6 @@ ${pendingQuestionsContext}
           );
 
           const eventId = result.lastInsertRowid;
-
-          // Link transactions to this event
           if (input.transaction_ids && input.transaction_ids.length > 0) {
             const linkStmt = db.prepare(`
               INSERT OR IGNORE INTO transaction_events (transaction_id, event_id) VALUES (?, ?)
@@ -327,74 +460,138 @@ ${pendingQuestionsContext}
             tool_use_id: block.id,
             content: `Spending event "${input.name}" saved successfully${input.transaction_ids?.length ? ` with ${input.transaction_ids.length} linked transactions` : ''}.`,
           });
+        } else if (block.name === 'save_followup') {
+          const input = block.input as {
+            question: string; context?: string; category?: string;
+          };
+
+          db.prepare(`
+            INSERT INTO advisor_questions (question, context_json, status, created_at)
+            VALUES (?, ?, 'pending', datetime('now'))
+          `).run(
+            input.question,
+            JSON.stringify({ context: input.context || null, category: input.category || null }),
+          );
+
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: `Follow-up question saved: "${input.question}"`,
+          });
         }
       }
-
-      // Add assistant message + tool results, then call again
-      conversationMessages.push({ role: 'assistant', content: currentResponse.content });
-      conversationMessages.push({ role: 'user', content: toolResults });
-      currentResponse = await anthropic.messages.create({
-        model: selectedModel,
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: conversationMessages,
-        tools,
-      });
-
-      totalInputTokens += currentResponse.usage.input_tokens;
-      totalOutputTokens += currentResponse.usage.output_tokens;
-    }
-
-    const assistantContent = currentResponse.content
-      .filter(block => block.type === 'text')
-      .map(block => block.type === 'text' ? block.text : '')
-      .join('\n');
-
-    // Save assistant response
-    db.prepare(`
-      INSERT INTO conversations (role, content, conversation_type)
-      VALUES ('assistant', ?, ?)
-    `).run(assistantContent, convType);
-
-    // Auto-compaction: check if there are enough unsummarized messages
-    try {
-      const lastSummary = db.prepare(`
-        SELECT messages_end_id FROM conversation_summaries
-        WHERE conversation_type = ?
-        ORDER BY messages_end_id DESC LIMIT 1
-      `).get(convType) as { messages_end_id: number } | undefined;
-
-      const unsummarizedCount = db.prepare(`
-        SELECT COUNT(*) as count FROM conversations
-        WHERE conversation_type = ? AND id > ?
-      `).get(convType, lastSummary?.messages_end_id ?? 0) as { count: number };
-
-      if (unsummarizedCount.count > 20) {
-        // Fire compaction in the background (non-blocking)
-        const baseUrl = request.nextUrl.origin;
-        fetch(`${baseUrl}/api/advisor/compact`, { method: 'POST' }).catch(() => {});
-      }
-    } catch (compactErr) {
-      console.error('Auto-compaction check failed:', compactErr);
-    }
-
-    const inputTokens = totalInputTokens;
-    const outputTokens = totalOutputTokens;
-    // Per-model pricing ($/M tokens): input / output
-    const pricing: Record<string, [number, number]> = {
-      'claude-sonnet-4-5-20250929': [3, 15],
-      'claude-opus-4-6': [15, 75],
-      'claude-haiku-4-5-20251001': [0.80, 4],
+      return toolResults;
     };
-    const [inPrice, outPrice] = pricing[selectedModel] ?? [3, 15];
-    const cost = (inputTokens * inPrice + outputTokens * outPrice) / 1_000_000;
 
-    return NextResponse.json({
-      role: 'assistant',
-      content: assistantContent,
-      model: currentResponse.model,
-      usage: { input_tokens: inputTokens, output_tokens: outputTokens },
-      cost,
+    // Stream response via SSE
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        const send = (data: object) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        };
+
+        try {
+          let totalInputTokens = 0;
+          let totalOutputTokens = 0;
+          let fullText = '';
+          let modelName = '';
+
+          // Streaming loop: stream text, handle tool use, repeat
+          let streaming = true;
+          while (streaming) {
+            const msgStream = anthropic.messages.stream({
+              model: selectedModel,
+              max_tokens: 1024,
+              system: systemPrompt,
+              messages: conversationMessages,
+              tools,
+            });
+
+            msgStream.on('text', (text) => {
+              fullText += text;
+              send({ type: 'delta', text });
+            });
+
+            const finalMessage = await msgStream.finalMessage();
+            modelName = finalMessage.model;
+            totalInputTokens += finalMessage.usage.input_tokens;
+            totalOutputTokens += finalMessage.usage.output_tokens;
+
+            if (finalMessage.stop_reason === 'tool_use') {
+              // Notify client that tools are running
+              const toolNames = finalMessage.content
+                .filter(b => b.type === 'tool_use')
+                .map(b => b.type === 'tool_use' ? b.name : '');
+              for (const name of toolNames) {
+                send({ type: 'tool_status', tool: name });
+              }
+
+              const toolResults = executeTools(finalMessage.content);
+              conversationMessages.push({ role: 'assistant', content: finalMessage.content });
+              conversationMessages.push({ role: 'user', content: toolResults });
+            } else {
+              streaming = false;
+            }
+          }
+
+          // Save assistant response to DB
+          db.prepare(`
+            INSERT INTO conversations (role, content, conversation_type)
+            VALUES ('assistant', ?, ?)
+          `).run(fullText, convType);
+
+          // Auto-compaction check
+          try {
+            const lastSummary = db.prepare(`
+              SELECT messages_end_id FROM conversation_summaries
+              WHERE conversation_type = ?
+              ORDER BY messages_end_id DESC LIMIT 1
+            `).get(convType) as { messages_end_id: number } | undefined;
+
+            const unsummarizedCount = db.prepare(`
+              SELECT COUNT(*) as count FROM conversations
+              WHERE conversation_type = ? AND id > ?
+            `).get(convType, lastSummary?.messages_end_id ?? 0) as { count: number };
+
+            if (unsummarizedCount.count > 20) {
+              const baseUrl = request.nextUrl.origin;
+              fetch(`${baseUrl}/api/advisor/compact`, { method: 'POST' }).catch(() => {});
+            }
+          } catch (compactErr) {
+            console.error('Auto-compaction check failed:', compactErr);
+          }
+
+          // Compute cost and send final metadata
+          const pricing: Record<string, [number, number]> = {
+            'claude-sonnet-4-5-20250929': [3, 15],
+            'claude-opus-4-6': [15, 75],
+            'claude-haiku-4-5-20251001': [0.80, 4],
+          };
+          const [inPrice, outPrice] = pricing[selectedModel] ?? [3, 15];
+          const cost = (totalInputTokens * inPrice + totalOutputTokens * outPrice) / 1_000_000;
+
+          send({
+            type: 'done',
+            model: modelName,
+            usage: { input_tokens: totalInputTokens, output_tokens: totalOutputTokens },
+            cost,
+          });
+        } catch (err) {
+          console.error('Streaming error:', err);
+          send({ type: 'error', message: err instanceof Error ? err.message : 'Streaming failed' });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
     });
   } catch (error) {
     console.error('POST /api/advisor error:', error);

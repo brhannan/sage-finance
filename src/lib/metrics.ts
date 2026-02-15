@@ -24,7 +24,7 @@ export function getSavingsRate(month?: string): { rate: number; income: number; 
   return { rate: Math.round(rate * 10) / 10, income, expenses };
 }
 
-export function getTrailingSavingsRate(months: number = 12): { rate: number; income: number; expenses: number } {
+export function getTrailingSavingsRate(months: number = 12): { rate: number; income: number; expenses: number; monthsWithIncome: number } {
   const db = getDb();
   const startDate = new Date();
   startDate.setMonth(startDate.getMonth() - months);
@@ -41,11 +41,17 @@ export function getTrailingSavingsRate(months: number = 12): { rate: number; inc
     FROM transactions WHERE type = 'expense' AND date >= ?
   `).get(start) as { total: number };
 
+  // Count distinct months that have income data (for accurate monthly average)
+  const monthsWithIncomeResult = db.prepare(`
+    SELECT COUNT(DISTINCT strftime('%Y-%m', date)) as count
+    FROM income_records WHERE date >= ?
+  `).get(start) as { count: number };
+
   const income = incomeResult.total;
   const expenses = expenseResult.total;
   const rate = income > 0 ? ((income - expenses) / income) * 100 : 0;
 
-  return { rate: Math.round(rate * 10) / 10, income, expenses };
+  return { rate: Math.round(rate * 10) / 10, income, expenses, monthsWithIncome: monthsWithIncomeResult.count };
 }
 
 export function getNetWorth(): { total: number; assets: number; liabilities: number; history: Array<{ date: string; amount: number }> } {

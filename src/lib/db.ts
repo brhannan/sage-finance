@@ -239,10 +239,10 @@ function initializeSchema(db: Database.Database) {
     -- Seed default categories if empty
     INSERT OR IGNORE INTO categories (name, keywords, color) VALUES
       ('Housing', 'rent,mortgage,hoa', '#3B82F6'),
-      ('Utilities', 'electric,gas,water,internet,phone,utility', '#8B5CF6'),
+      ('Utilities', 'electric,water,internet,phone,utility,pse,puget sound energy,xfinity,comcast,centurylink,t-mobile,verizon,at&t', '#8B5CF6'),
       ('Groceries', 'grocery,groceries,whole foods,trader joe,safeway,kroger,publix,aldi', '#10B981'),
       ('Dining', 'restaurant,doordash,uber eats,grubhub,starbucks,coffee,mcdonald,chipotle', '#F59E0B'),
-      ('Transportation', 'gas,fuel,uber,lyft,parking,transit,metro', '#EF4444'),
+      ('Transportation', 'gas,fuel,uber,lyft,parking,transit,metro,shell oil,chevron,exxon,mobil,arco,costco gas,bp#,sunoco,valero,speedway,marathon petro,wawa,circle k,phillips 66,76 ,casey,qt ,quiktrip,racetrac,pilot,flying j,love s,sheetz,kwik trip,good to go,orca,toll', '#EF4444'),
       ('Shopping', 'amazon,target,walmart,costco,best buy', '#EC4899'),
       ('Entertainment', 'netflix,spotify,hulu,disney,movie,concert,gaming', '#6366F1'),
       ('Healthcare', 'doctor,pharmacy,cvs,walgreens,medical,dental,hospital', '#14B8A6'),
@@ -262,4 +262,33 @@ function initializeSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_balances_account_date ON balances(account_id, date);
     CREATE INDEX IF NOT EXISTS idx_income_date ON income_records(date);
   `);
+
+  // --- Migrations ---
+  // Update category keywords for existing databases (runs idempotently)
+  const KEYWORD_UPDATES: Record<string, string> = {
+    'Utilities': 'electric,water,internet,phone,utility,pse,puget sound energy,xfinity,comcast,centurylink,t-mobile,verizon,at&t',
+    'Transportation': 'gas,fuel,uber,lyft,parking,transit,metro,shell oil,chevron,exxon,mobil,arco,costco gas,bp#,sunoco,valero,speedway,marathon petro,wawa,circle k,phillips 66,76 ,casey,qt ,quiktrip,racetrac,pilot,flying j,love s,sheetz,kwik trip,good to go,orca,toll',
+  };
+  const updateKeywords = db.prepare('UPDATE categories SET keywords = ? WHERE name = ?');
+  for (const [name, keywords] of Object.entries(KEYWORD_UPDATES)) {
+    updateKeywords.run(keywords, name);
+  }
+
+  // Re-categorize transactions that match Transportation keywords but are currently
+  // miscategorized (e.g., gas station charges in Housing/Utilities/Uncategorized)
+  const transportCat = db.prepare("SELECT id FROM categories WHERE name = 'Transportation'").get() as { id: number } | undefined;
+  if (transportCat) {
+    const gasPatterns = [
+      '%shell oil%', '%chevron%', '%arco%', '%costco gas%', '%exxon%', '%mobil%',
+      '%bp#%', '%sunoco%', '%valero%', '%speedway%', '%marathon petro%',
+      '%circle k%', '%phillips 66%', '%quiktrip%', '%racetrac%',
+      '%pilot%', '%flying j%', '%sheetz%', '%kwik trip%', '%wawa%',
+    ];
+    const orClauses = gasPatterns.map(() => 'LOWER(description) LIKE ?').join(' OR ');
+    db.prepare(`
+      UPDATE transactions SET category_id = ?
+      WHERE (${orClauses})
+        AND (category_id IS NULL OR category_id != ?)
+    `).run(transportCat.id, ...gasPatterns, transportCat.id);
+  }
 }

@@ -66,6 +66,8 @@ export default function AdvisorPage() {
   const [lastResponse, setLastResponse] = useState<LastResponse>({});
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string | null>(null);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -119,7 +121,7 @@ export default function AdvisorPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   const sendMessage = async () => {
     if ((!input.trim() && attachedFiles.length === 0) || sending) return;
@@ -207,26 +209,75 @@ export default function AdvisorPage() {
           body: JSON.stringify({ message: userMessage, model }),
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.content) {
-            const assistantMsg: Message = {
-              id: Date.now() + 1,
-              role: "assistant",
-              content: data.content,
-              created_at: new Date().toISOString(),
-            };
-            setMessages((prev) => [...prev, assistantMsg]);
-            setLastResponse({
-              model: data.model,
-              inputTokens: data.usage?.input_tokens,
-              outputTokens: data.usage?.output_tokens,
-              cost: data.cost,
-            });
-          }
-        } else {
+        if (!res.ok) {
           const errData = await res.json().catch(() => null);
           throw new Error(errData?.error || "Request failed");
+        }
+
+        // Read SSE stream
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No response stream");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let accumulated = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const json = line.slice(6);
+            try {
+              const event = JSON.parse(json);
+              if (event.type === "delta") {
+                accumulated += event.text;
+                setStreamingContent(accumulated);
+                setToolStatus(null);
+              } else if (event.type === "tool_status") {
+                setToolStatus(event.tool);
+              } else if (event.type === "done") {
+                setStreamingContent(null);
+                setToolStatus(null);
+                const assistantMsg: Message = {
+                  id: Date.now() + 1,
+                  role: "assistant",
+                  content: accumulated,
+                  created_at: new Date().toISOString(),
+                };
+                setMessages((prev) => [...prev, assistantMsg]);
+                setLastResponse({
+                  model: event.model,
+                  inputTokens: event.usage?.input_tokens,
+                  outputTokens: event.usage?.output_tokens,
+                  cost: event.cost,
+                });
+              } else if (event.type === "error") {
+                throw new Error(event.message || "Streaming error");
+              }
+            } catch (e) {
+              if (e instanceof SyntaxError) continue;
+              throw e;
+            }
+          }
+        }
+
+        // Handle case where stream ends without a done event
+        if (accumulated && streamingContent !== null) {
+          setStreamingContent(null);
+          setToolStatus(null);
+          const assistantMsg: Message = {
+            id: Date.now() + 1,
+            role: "assistant",
+            content: accumulated,
+            created_at: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
         }
       }
     } catch (err) {
@@ -414,7 +465,25 @@ export default function AdvisorPage() {
                   </div>
                 ))}
 
-              {sending && (
+              {/* Streaming message bubble */}
+              {streamingContent !== null && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-lg px-4 py-3 bg-muted">
+                    <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:mt-3 prose-headings:mb-1 prose-hr:my-2 prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
+                      <span className="inline-block w-2 h-4 bg-foreground/50 animate-pulse ml-0.5 align-text-bottom" />
+                    </div>
+                    {toolStatus && (
+                      <p className="text-xs text-muted-foreground mt-1 italic">
+                        Using {toolStatus.replace(/_/g, " ")}...
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Bouncing dots: only show before streaming starts */}
+              {sending && streamingContent === null && (
                 <div className="flex justify-start">
                   <div className="bg-muted rounded-lg px-4 py-3">
                     <div className="flex items-center gap-1">

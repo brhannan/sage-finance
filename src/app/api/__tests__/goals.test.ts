@@ -40,6 +40,24 @@ describe('/api/goals', () => {
       // progress = (40000/100000)*100 = 40
       expect(downPayment.progress).toBe(40);
     });
+
+    it('resolves current_amount from latest balance for account-linked goals', async () => {
+      // Insert a goal linked to account 2 (Ally Savings, balance $25,000)
+      // POST doesn't support account_id yet (Task 3), so insert directly
+      db.prepare(`
+        INSERT INTO goals (name, type, target_amount, current_amount, account_id)
+        VALUES ('Savings Target', 'savings', 50000, 0, 2)
+      `).run();
+
+      const res = await GET();
+      const data = await res.json();
+      const linked = data.find((g: { name: string }) => g.name === 'Savings Target');
+
+      expect(linked).toBeDefined();
+      expect(linked.current_amount).toBe(25000); // from Ally Savings balance
+      expect(linked.account_id).toBe(2);
+      expect(linked.progress).toBeCloseTo(50, 0);
+    });
   });
 
   describe('POST', () => {

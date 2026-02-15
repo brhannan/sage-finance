@@ -165,16 +165,36 @@ export function getMonthlySpendingTrend(months: number = 6): Array<{ month: stri
 export function getGoalProgress(): Array<{
   id: number; name: string; type: string; target_amount: number;
   current_amount: number; target_date: string | null; progress: number;
+  account_id: number | null;
 }> {
   const db = getDb();
-  const goals = db.prepare('SELECT * FROM goals WHERE is_active = 1').all() as Array<{
+  const goals = db.prepare(`
+    SELECT g.*,
+      CASE
+        WHEN g.account_id IS NOT NULL THEN (
+          SELECT b.balance FROM balances b
+          WHERE b.account_id = g.account_id
+          ORDER BY b.date DESC LIMIT 1
+        )
+        ELSE g.current_amount
+      END as resolved_amount
+    FROM goals g
+    WHERE g.is_active = 1
+  `).all() as Array<{
     id: number; name: string; type: string; target_amount: number;
-    current_amount: number; target_date: string | null;
+    current_amount: number; resolved_amount: number;
+    target_date: string | null; account_id: number | null;
   }>;
 
   return goals.map(g => ({
-    ...g,
-    progress: g.target_amount > 0 ? Math.min(100, (g.current_amount / g.target_amount) * 100) : 0,
+    id: g.id,
+    name: g.name,
+    type: g.type,
+    target_amount: g.target_amount,
+    current_amount: g.resolved_amount ?? g.current_amount,
+    target_date: g.target_date,
+    account_id: g.account_id,
+    progress: g.target_amount > 0 ? Math.min(100, ((g.resolved_amount ?? g.current_amount) / g.target_amount) * 100) : 0,
   }));
 }
 
@@ -245,10 +265,10 @@ export function getMonthlyIncomeExpenseTrend(months: number = 6): Array<{
   return results;
 }
 
-export function getAccountBreakdown(): Array<{ name: string; type: string; institution: string | null; balance: number; balance_date: string }> {
+export function getAccountBreakdown(): Array<{ id: number; name: string; type: string; institution: string | null; balance: number; balance_date: string }> {
   const db = getDb();
   return db.prepare(`
-    SELECT a.name, a.type, a.institution, b.balance, b.date as balance_date
+    SELECT a.id, a.name, a.type, a.institution, b.balance, b.date as balance_date
     FROM accounts a
     LEFT JOIN balances b ON b.account_id = a.id
       AND b.date = (SELECT MAX(b2.date) FROM balances b2 WHERE b2.account_id = a.id)
@@ -263,7 +283,7 @@ export function getAccountBreakdown(): Array<{ name: string; type: string; insti
         WHEN 'loan' THEN 6
       END,
       b.balance DESC
-  `).all() as Array<{ name: string; type: string; institution: string | null; balance: number; balance_date: string }>;
+  `).all() as Array<{ id: number; name: string; type: string; institution: string | null; balance: number; balance_date: string }>;
 }
 
 export function getHomeBuyingReadiness(config: {

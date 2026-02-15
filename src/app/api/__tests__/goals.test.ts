@@ -40,6 +40,24 @@ describe('/api/goals', () => {
       // progress = (40000/100000)*100 = 40
       expect(downPayment.progress).toBe(40);
     });
+
+    it('resolves current_amount from latest balance for account-linked goals', async () => {
+      // Insert a goal linked to account 2 (Ally Savings, balance $25,000)
+      // POST doesn't support account_id yet (Task 3), so insert directly
+      db.prepare(`
+        INSERT INTO goals (name, type, target_amount, current_amount, account_id)
+        VALUES ('Savings Target', 'savings', 50000, 0, 2)
+      `).run();
+
+      const res = await GET();
+      const data = await res.json();
+      const linked = data.find((g: { name: string }) => g.name === 'Savings Target');
+
+      expect(linked).toBeDefined();
+      expect(linked.current_amount).toBe(25000); // from Ally Savings balance
+      expect(linked.account_id).toBe(2);
+      expect(linked.progress).toBeCloseTo(50, 0);
+    });
   });
 
   describe('POST', () => {
@@ -64,6 +82,24 @@ describe('/api/goals', () => {
       expect(data.current_amount).toBe(500);
       expect(data.target_date).toBe('2025-12-31');
       expect(data.is_active).toBe(1);
+    });
+
+    it('creates a goal linked to an account', async () => {
+      const req = new NextRequest('http://localhost/api/goals', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Brokerage Growth',
+          type: 'savings',
+          target_amount: 200000,
+          account_id: 4,
+        }),
+      });
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(data.name).toBe('Brokerage Growth');
+      expect(data.account_id).toBe(4);
     });
 
     it('returns 400 when missing name or type', async () => {

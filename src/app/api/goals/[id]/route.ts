@@ -9,7 +9,7 @@ export async function PUT(
     const db = getDb();
     const { id } = await params;
     const body = await request.json();
-    const { name, type, target_amount, current_amount, target_date, description, config, is_active } = body;
+    const { name, type, target_amount, current_amount, target_date, description, config, is_active, account_id } = body;
 
     const existing = db.prepare('SELECT id FROM goals WHERE id = ?').get(Number(id));
     if (!existing) {
@@ -27,6 +27,7 @@ export async function PUT(
     if (description !== undefined) { fields.push('description = ?'); values.push(description); }
     if (config !== undefined) { fields.push('config = ?'); values.push(JSON.stringify(config)); }
     if (is_active !== undefined) { fields.push('is_active = ?'); values.push(is_active); }
+    if (account_id !== undefined) { fields.push('account_id = ?'); values.push(account_id); }
 
     if (fields.length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });

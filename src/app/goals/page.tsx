@@ -42,6 +42,15 @@ interface Goal {
   description: string | null;
   is_active: number;
   progress: number;
+  account_id: number | null;
+  account_name: string | null;
+}
+
+interface Account {
+  id: number;
+  name: string;
+  type: string;
+  institution: string | null;
 }
 
 const GOAL_TYPES = [
@@ -65,6 +74,7 @@ const typeLabel = (type: string) =>
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Add/Edit dialog
@@ -77,6 +87,7 @@ export default function GoalsPage() {
     current_amount: "",
     target_date: "",
     description: "",
+    account_id: "",
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -96,6 +107,10 @@ export default function GoalsPage() {
     fetchGoals();
   }, [fetchGoals]);
 
+  useEffect(() => {
+    fetch('/api/accounts').then(r => r.ok ? r.json() : []).then(setAccounts).catch(() => {});
+  }, []);
+
   const openAdd = () => {
     setEditingGoal(null);
     setForm({
@@ -105,6 +120,7 @@ export default function GoalsPage() {
       current_amount: "",
       target_date: "",
       description: "",
+      account_id: "",
     });
     setDialogOpen(true);
   };
@@ -118,6 +134,7 @@ export default function GoalsPage() {
       current_amount: String(goal.current_amount),
       target_date: goal.target_date || "",
       description: goal.description || "",
+      account_id: goal.account_id ? String(goal.account_id) : "",
     });
     setDialogOpen(true);
   };
@@ -135,6 +152,7 @@ export default function GoalsPage() {
         : 0,
       target_date: form.target_date || null,
       description: form.description || null,
+      account_id: form.account_id && form.account_id !== "none" ? parseInt(form.account_id) : null,
     };
 
     try {
@@ -264,6 +282,28 @@ export default function GoalsPage() {
                 />
               </div>
               <div className="space-y-2">
+                <Label>Linked Account (optional)</Label>
+                <Select
+                  value={form.account_id || "none"}
+                  onValueChange={(v) => setForm({ ...form, account_id: v === "none" ? "" : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="None — track manually" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None — track manually</SelectItem>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}{a.institution ? ` (${a.institution})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Link to an account to auto-track progress from balance updates.
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label>Description</Label>
                 <Textarea
                   placeholder="What is this goal for?"
@@ -311,6 +351,11 @@ export default function GoalsPage() {
                     <CardTitle>{goal.name}</CardTitle>
                     <CardDescription className="mt-1">
                       <Badge variant="secondary">{typeLabel(goal.type)}</Badge>
+                      {goal.account_name && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          Tracking: {goal.account_name}
+                        </span>
+                      )}
                       {goal.target_date && (
                         <span className="ml-2 text-xs">
                           Target: {goal.target_date}

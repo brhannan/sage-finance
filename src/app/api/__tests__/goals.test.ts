@@ -84,6 +84,24 @@ describe('/api/goals', () => {
       expect(data.is_active).toBe(1);
     });
 
+    it('creates a goal linked to an account', async () => {
+      const req = new NextRequest('http://localhost/api/goals', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Brokerage Growth',
+          type: 'savings',
+          target_amount: 200000,
+          account_id: 4,
+        }),
+      });
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(data.name).toBe('Brokerage Growth');
+      expect(data.account_id).toBe(4);
+    });
+
     it('returns 400 when missing name or type', async () => {
       // Missing type
       const req1 = new NextRequest('http://localhost/api/goals', {

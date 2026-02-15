@@ -47,19 +47,20 @@ export async function POST(request: NextRequest) {
   try {
     const db = getDb();
     const body = await request.json();
-    const { name, type, target_amount, current_amount, target_date, description, config } = body;
+    const { name, type, target_amount, current_amount, target_date, description, config, account_id } = body;
 
     if (!name || !type) {
       return NextResponse.json({ error: 'name and type are required' }, { status: 400 });
     }
 
     const result = db.prepare(`
-      INSERT INTO goals (name, type, target_amount, current_amount, target_date, description, config)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO goals (name, type, target_amount, current_amount, target_date, description, config, account_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       name, type, target_amount || null, current_amount || 0,
       target_date || null, description || null,
       config ? JSON.stringify(config) : null,
+      account_id || null,
     );
 
     const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(result.lastInsertRowid);

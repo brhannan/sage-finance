@@ -247,6 +247,12 @@ GUIDELINES:
 - TRANSACTION LOOKUP: You have a search_transactions tool. When the user asks about specific charges, past months, or transactions outside your recent 30-day window, USE IT to look them up. Never say you don't have access to older data — search for it instead. You can search by date range, amount, description, category, or account.
 - CRITICAL INCOME NOTE: The "this month so far" income figure is PARTIAL — it only reflects paychecks recorded so far this month, NOT full monthly income. The user is typically paid twice per month. NEVER treat a single paycheck as the user's monthly income. Always use the "average monthly net income (trailing 12 months)" figure when discussing monthly take-home pay, budgeting, or savings potential. If current month income is $0 or seems low, that's normal — paychecks may not have been recorded yet.
 
+GOAL MANAGEMENT:
+- You have a manage_goals tool. Use it when the user wants to set financial goals, savings targets, or track progress toward any financial milestone.
+- When creating goals, link them to accounts when possible (using account_id) so progress updates automatically from balance snapshots.
+- Available account IDs are shown in the ACCOUNTS section above — match goals to the most relevant account.
+- Goal types: fi (financial independence), home_purchase, savings, debt_payoff, custom.
+
 PROFILE MANAGEMENT:
 - You have a save_profile tool. Use it to save any personal or financial details the user shares.
 - Important profile fields: name, age, location, occupation, total_comp (total annual compensation), expected_bonus, filing_status, risk_tolerance, financial_goals
@@ -354,6 +360,26 @@ ${pendingQuestionsContext}
             category: { type: 'string', description: 'Topic category (e.g., "retirement", "insurance", "taxes", "savings", "benefits")' },
           },
           required: ['question'],
+        },
+      },
+      {
+        name: 'manage_goals',
+        description: 'Create or update financial goals. Use this when the user wants to set savings targets, track debt payoff, plan for a home purchase, or establish any financial milestone. Link goals to accounts when possible so progress updates automatically from balance snapshots.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            action: { type: 'string', enum: ['create', 'update'], description: 'Whether to create a new goal or update an existing one' },
+            name: { type: 'string', description: 'Goal name (e.g., "Emergency Fund"). Required for create.' },
+            type: { type: 'string', enum: ['fi', 'home_purchase', 'savings', 'debt_payoff', 'custom'], description: 'Goal type. Required for create.' },
+            target_amount: { type: 'number', description: 'Target dollar amount. Required for create.' },
+            current_amount: { type: 'number', description: 'Current progress amount (default 0). Not needed if linking to an account.' },
+            target_date: { type: 'string', description: 'Target completion date (YYYY-MM-DD)' },
+            description: { type: 'string', description: 'Brief description of the goal' },
+            account_id: { type: 'number', description: 'Link to an account ID for automatic progress tracking from balance snapshots. Use this when the goal maps to a specific account (e.g., savings account, investment account).' },
+            goal_id: { type: 'number', description: 'ID of the goal to update. Required for update.' },
+            is_active: { type: 'boolean', description: 'Set to false to deactivate a completed or abandoned goal' },
+          },
+          required: ['action'],
         },
       },
     ];
@@ -478,6 +504,108 @@ ${pendingQuestionsContext}
             tool_use_id: block.id,
             content: `Follow-up question saved: "${input.question}"`,
           });
+        } else if (block.name === 'manage_goals') {
+          const input = block.input as {
+            action: 'create' | 'update';
+            name?: string; type?: string; target_amount?: number;
+            current_amount?: number; target_date?: string;
+            description?: string; account_id?: number;
+            goal_id?: number; is_active?: boolean;
+          };
+
+          if (input.action === 'create') {
+            if (!input.name || !input.type || input.target_amount == null) {
+              toolResults.push({
+                type: 'tool_result', tool_use_id: block.id,
+                content: 'Error: name, type, and target_amount are required for creating a goal.',
+              });
+            } else {
+              const result = db.prepare(`
+                INSERT INTO goals (name, type, target_amount, current_amount, target_date, description, account_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+              `).run(
+                input.name, input.type, input.target_amount,
+                input.current_amount ?? 0,
+                input.target_date ?? null,
+                input.description ?? null,
+                input.account_id ?? null,
+              );
+              const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(result.lastInsertRowid) as {
+                id: number; name: string; type: string; target_amount: number;
+                current_amount: number; account_id: number | null;
+              };
+
+              let currentAmount = goal.current_amount;
+              if (goal.account_id) {
+                const bal = db.prepare(
+                  'SELECT balance FROM balances WHERE account_id = ? ORDER BY date DESC LIMIT 1'
+                ).get(goal.account_id) as { balance: number } | undefined;
+                if (bal) currentAmount = bal.balance;
+              }
+
+              const progress = goal.target_amount > 0
+                ? Math.min(100, (currentAmount / goal.target_amount) * 100)
+                : 0;
+
+              toolResults.push({
+                type: 'tool_result', tool_use_id: block.id,
+                content: `Goal "${input.name}" created (ID: ${goal.id}). Current: $${currentAmount.toLocaleString()} / $${goal.target_amount.toLocaleString()} (${progress.toFixed(1)}% complete)${goal.account_id ? ' — linked to account for auto-tracking' : ''}.`,
+              });
+            }
+          } else if (input.action === 'update') {
+            if (!input.goal_id) {
+              toolResults.push({
+                type: 'tool_result', tool_use_id: block.id,
+                content: 'Error: goal_id is required for updating a goal.',
+              });
+            } else {
+              const existing = db.prepare('SELECT id FROM goals WHERE id = ?').get(input.goal_id);
+              if (!existing) {
+                toolResults.push({
+                  type: 'tool_result', tool_use_id: block.id,
+                  content: `Error: Goal with ID ${input.goal_id} not found.`,
+                });
+              } else {
+                const fields: string[] = [];
+                const values: (string | number | null)[] = [];
+
+                if (input.name !== undefined) { fields.push('name = ?'); values.push(input.name); }
+                if (input.description !== undefined) { fields.push('description = ?'); values.push(input.description); }
+                if (input.current_amount !== undefined) { fields.push('current_amount = ?'); values.push(input.current_amount); }
+                if (input.target_amount !== undefined) { fields.push('target_amount = ?'); values.push(input.target_amount); }
+                if (input.target_date !== undefined) { fields.push('target_date = ?'); values.push(input.target_date); }
+                if (input.is_active !== undefined) { fields.push('is_active = ?'); values.push(input.is_active ? 1 : 0); }
+                if (input.account_id !== undefined) { fields.push('account_id = ?'); values.push(input.account_id); }
+
+                if (fields.length > 0) {
+                  fields.push("updated_at = datetime('now')");
+                  values.push(input.goal_id);
+                  db.prepare(`UPDATE goals SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+                }
+
+                const updated = db.prepare('SELECT * FROM goals WHERE id = ?').get(input.goal_id) as {
+                  name: string; target_amount: number; current_amount: number; account_id: number | null;
+                };
+
+                let currentAmount = updated.current_amount;
+                if (updated.account_id) {
+                  const bal = db.prepare(
+                    'SELECT balance FROM balances WHERE account_id = ? ORDER BY date DESC LIMIT 1'
+                  ).get(updated.account_id) as { balance: number } | undefined;
+                  if (bal) currentAmount = bal.balance;
+                }
+
+                const progress = updated.target_amount > 0
+                  ? Math.min(100, (currentAmount / updated.target_amount) * 100)
+                  : 0;
+
+                toolResults.push({
+                  type: 'tool_result', tool_use_id: block.id,
+                  content: `Goal "${updated.name}" updated. Current: $${currentAmount.toLocaleString()} / $${updated.target_amount.toLocaleString()} (${progress.toFixed(1)}% complete).`,
+                });
+              }
+            }
+          }
         }
       }
       return toolResults;

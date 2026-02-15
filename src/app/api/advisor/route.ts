@@ -160,9 +160,13 @@ export async function POST(request: NextRequest) {
       `  ${t.date} | $${Math.abs(t.amount).toFixed(2)} | ${t.description.slice(0, 40)} | ${t.category} | ${t.account}`
     ).join('\n');
 
-    const goalsContext = goals.map(g =>
-      `  ${g.name} (${g.type}): $${g.current_amount.toLocaleString()} / $${g.target_amount.toLocaleString()} (${g.progress.toFixed(1)}%)`
-    ).join('\n');
+    const goalsContext = goals.map(g => {
+      const acct = g.account_id
+        ? accounts.find(a => a.id === g.account_id)
+        : null;
+      const acctLabel = acct ? ` [tracking: ${acct.name}]` : '';
+      return `  ${g.name} (${g.type}): $${g.current_amount.toLocaleString()} / $${g.target_amount.toLocaleString()} (${g.progress.toFixed(1)}%)${acctLabel}`;
+    }).join('\n');
 
     const accountsContext = accounts.map(a => {
       const bal = a.balance != null ? `$${a.balance.toLocaleString()}` : 'no balance';

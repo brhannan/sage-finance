@@ -265,10 +265,10 @@ export function getMonthlyIncomeExpenseTrend(months: number = 6): Array<{
   return results;
 }
 
-export function getAccountBreakdown(): Array<{ name: string; type: string; institution: string | null; balance: number; balance_date: string }> {
+export function getAccountBreakdown(): Array<{ id: number; name: string; type: string; institution: string | null; balance: number; balance_date: string }> {
   const db = getDb();
   return db.prepare(`
-    SELECT a.name, a.type, a.institution, b.balance, b.date as balance_date
+    SELECT a.id, a.name, a.type, a.institution, b.balance, b.date as balance_date
     FROM accounts a
     LEFT JOIN balances b ON b.account_id = a.id
       AND b.date = (SELECT MAX(b2.date) FROM balances b2 WHERE b2.account_id = a.id)
@@ -283,7 +283,7 @@ export function getAccountBreakdown(): Array<{ name: string; type: string; insti
         WHEN 'loan' THEN 6
       END,
       b.balance DESC
-  `).all() as Array<{ name: string; type: string; institution: string | null; balance: number; balance_date: string }>;
+  `).all() as Array<{ id: number; name: string; type: string; institution: string | null; balance: number; balance_date: string }>;
 }
 
 export function getHomeBuyingReadiness(config: {

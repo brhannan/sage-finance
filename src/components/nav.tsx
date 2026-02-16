@@ -15,6 +15,7 @@ const navItems = [
   { href: "/goals", label: "Goals" },
   { href: "/fi-tracker", label: "FI Tracker" },
   { href: "/home-buying", label: "Home Buying" },
+  { href: "/connected-accounts", label: "Connections" },
 ];
 
 function SparklesIcon() {

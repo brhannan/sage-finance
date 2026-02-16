@@ -9,6 +9,31 @@ export function createTestDb(): Database.Database {
   db.pragma('foreign_keys = ON');
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS plaid_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id TEXT NOT NULL UNIQUE,
+      access_token TEXT NOT NULL,
+      institution_name TEXT,
+      cursor TEXT,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'error', 'revoked')),
+      error_code TEXT,
+      error_message TEXT,
+      last_synced_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS plaid_sync_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plaid_item_id INTEGER REFERENCES plaid_items(id),
+      status TEXT NOT NULL CHECK(status IN ('success', 'error')),
+      transactions_added INTEGER DEFAULT 0,
+      transactions_modified INTEGER DEFAULT 0,
+      transactions_removed INTEGER DEFAULT 0,
+      error_message TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -16,6 +41,8 @@ export function createTestDb(): Database.Database {
       institution TEXT,
       last_four TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
+      plaid_account_id TEXT,
+      plaid_item_id INTEGER REFERENCES plaid_items(id),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -42,6 +69,8 @@ export function createTestDb(): Database.Database {
       notes TEXT,
       import_hash TEXT UNIQUE,
       source TEXT DEFAULT 'manual',
+      plaid_transaction_id TEXT UNIQUE,
+      is_pending INTEGER DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -212,6 +241,8 @@ export function createTestDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
     CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_plaid_id ON transactions(plaid_transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_accounts_plaid_account_id ON accounts(plaid_account_id);
     CREATE INDEX IF NOT EXISTS idx_balances_account_date ON balances(account_id, date);
     CREATE INDEX IF NOT EXISTS idx_income_date ON income_records(date);
   `);

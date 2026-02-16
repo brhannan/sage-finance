@@ -374,8 +374,8 @@ function initializeSchema(db: Database.Database) {
   try {
     db.prepare("SELECT plaid_transaction_id FROM transactions LIMIT 1").get();
   } catch {
-    db.exec("ALTER TABLE transactions ADD COLUMN plaid_transaction_id TEXT UNIQUE");
+    db.exec("ALTER TABLE transactions ADD COLUMN plaid_transaction_id TEXT");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_plaid_id ON transactions(plaid_transaction_id)");
     db.exec("ALTER TABLE transactions ADD COLUMN is_pending INTEGER DEFAULT 0");
-    db.exec("CREATE INDEX IF NOT EXISTS idx_transactions_plaid_id ON transactions(plaid_transaction_id)");
   }
 }

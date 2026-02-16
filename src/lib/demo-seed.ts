@@ -211,7 +211,7 @@ export function seedDemoData(db: Database.Database) {
 
       insertIncome.run(d, periodStart, periodEnd, grossPerPaycheck, netPay,
         federalTax, stateTax, socialSecurity, medicare, retirement,
-        health, dental, vision, hsa, 'TechCorp Inc.', 'demo');
+        health, dental, vision, hsa, 'TechCorp Inc.');
 
       // Also add income transaction to checking
       const hash = crypto.createHash('sha256').update(`demo-income-${txnSeq++}`).digest('hex');
@@ -297,4 +297,33 @@ export function seedDemoData(db: Database.Database) {
     'Brokerage account hasn\'t been rebalanced in 8 months. Check asset allocation against target.',
     'pending', null
   );
+
+  // ── Demo Conversations (for AI Advisor page) ──
+  const insertConvo = db.prepare(
+    `INSERT INTO conversations (role, content, conversation_type, created_at) VALUES (?, ?, 'general', ?)`
+  );
+
+  const now = new Date();
+  const convoTime = (minutesAgo: number) => {
+    const t = new Date(now.getTime() - minutesAgo * 60000);
+    return t.toISOString().replace('T', ' ').slice(0, 19);
+  };
+
+  insertConvo.run('user', 'How am I doing financially? Give me an honest assessment.', convoTime(12));
+  insertConvo.run('assistant', `Great question, Alex. Here's where you stand:\n\n**The Good:**\n- Your trailing 12-month savings rate is solid at ~38% — well above the typical recommendation of 20%\n- Your 401(k) and Roth IRA are growing steadily. At your current contribution rate, you're on track for Coast FI by your early 40s\n- Emergency fund is 74% funded ($18,500 / $25,000) — you should hit your target by end of year\n\n**Areas to Watch:**\n- Dining spending has been creeping up — averaging $280/month vs. $210 six months ago. That's an extra $840/year\n- Your house down payment goal ($31,300 / $100,000) needs acceleration if you're targeting 2028. At current pace, you'd hit ~$67K by then\n\n**My Recommendation:**\nConsider bumping your monthly house fund contribution from $1,500 to $1,800. The extra $300/month would close the gap without impacting your lifestyle much — especially if you trim dining back to the $220 range.`, convoTime(11));
+  insertConvo.run('user', 'What would happen if I maxed out my 401k instead of just doing 10%?', convoTime(6));
+  insertConvo.run('assistant', `Let me run those numbers for you.\n\n**Current:** 10% contribution = $14,500/year ($604/paycheck)\n**Maxed:** $23,500/year = 16.2% of your $145K salary ($979/paycheck)\n\n**Impact on take-home pay:**\n- Extra $375/paycheck pre-tax → roughly **$280 less per paycheck** after tax savings\n- Your monthly take-home drops from ~$3,850 to ~$3,290\n\n**The upside is significant:**\n- Extra $9,000/year in tax-advantaged growth\n- At 7% average returns, that's an additional **~$125K over 10 years**\n- You'd also save ~$1,980/year in federal taxes (22% bracket)\n\n**Can you afford it?** Looking at your spending, your average monthly expenses are ~$3,100. With the reduced take-home of $3,290, you'd have a thin $190 buffer. That's tight.\n\n**My suggestion:** Split the difference — go to 14% ($20,300/year). That keeps a comfortable $400+/month buffer while still capturing most of the benefit. You can always increase later once your emergency fund is fully funded.`, convoTime(5));
+
+  // ── Seed insights cache so dashboard doesn't need API call ──
+  const insightsData = JSON.stringify({
+    summary: 'Dining spending trending up 30% while savings rate remains strong at 38%.',
+    going_well: ['Emergency fund on track for year-end goal', 'Consistent 401(k) contributions growing steadily'],
+    to_improve: ['Dining up 30% vs 3-month average', 'House fund needs $1,800/mo to hit 2028 target'],
+    detailed_report: null,
+  });
+
+  db.prepare(`
+    INSERT INTO insights_cache (id, cache_key, data, generated_at, data_hash)
+    VALUES (2, 'demo', ?, ?, 'demo-seed')
+  `).run(insightsData, Date.now());
 }

@@ -64,3 +64,50 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) and start importing your financial data.
 
 The SQLite database is auto-created in the `data/` directory on first use. No setup required.
+
+## Plaid Integration (Automatic Bank Syncing)
+
+Optionally connect bank accounts via [Plaid](https://plaid.com) to sync transactions and balances automatically instead of importing CSVs manually.
+
+### 1. Get Plaid API keys
+
+1. Sign up at [dashboard.plaid.com/signup](https://dashboard.plaid.com/signup) (select "Personal/Hobby")
+2. Go to **Team Settings > Keys** and copy your **Client ID** and **Secret**
+3. Add them to `.env.local`:
+
+```bash
+PLAID_CLIENT_ID=your-client-id
+PLAID_SECRET=your-secret
+PLAID_ENV=sandbox
+```
+
+### 2. Test in Sandbox
+
+Start with `PLAID_ENV=sandbox`. When connecting an account, use the test credentials `user_good` / `pass_good`. This lets you verify the full flow without connecting a real bank.
+
+### 3. Connect to real accounts
+
+Apply for **Development** access in the Plaid dashboard (free, up to 100 live connections). Once approved, switch to:
+
+```bash
+PLAID_ENV=development
+```
+
+Then go to the **Connections** page in the app and click **Connect Bank Account** to link your real accounts.
+
+### 4. Scheduled sync (optional)
+
+Transactions sync automatically when you connect an account. To keep them up to date, set up a daily cron job hitting the sync endpoint:
+
+```bash
+# Example: sync daily at 6 AM
+0 6 * * * curl -s -X POST http://localhost:3000/api/plaid/cron
+```
+
+You can also protect this endpoint with a secret by setting `CRON_SECRET` in `.env.local` and passing it as a bearer token:
+
+```bash
+0 6 * * * curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/plaid/cron
+```
+
+Or just use the **Sync Now** button on the Connections page anytime.

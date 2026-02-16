@@ -234,6 +234,31 @@ function initializeSchema(db: Database.Database) {
       PRIMARY KEY (transaction_id, event_id)
     );
 
+    CREATE TABLE IF NOT EXISTS plaid_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id TEXT NOT NULL UNIQUE,
+      access_token TEXT NOT NULL,
+      institution_name TEXT,
+      cursor TEXT,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'error', 'revoked')),
+      error_code TEXT,
+      error_message TEXT,
+      last_synced_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS plaid_sync_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plaid_item_id INTEGER REFERENCES plaid_items(id),
+      status TEXT NOT NULL CHECK(status IN ('success', 'error')),
+      transactions_added INTEGER DEFAULT 0,
+      transactions_modified INTEGER DEFAULT 0,
+      transactions_removed INTEGER DEFAULT 0,
+      error_message TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_advisor_questions_status ON advisor_questions(status);
     CREATE INDEX IF NOT EXISTS idx_spending_events_dates ON spending_events(date_start, date_end);
 
@@ -255,6 +280,8 @@ function initializeSchema(db: Database.Database) {
       ('Gifts & Donations', 'gift,donation,charity', '#FB923C'),
       ('Income', 'payroll,salary,deposit,direct dep', '#22C55E'),
       ('Transfer', 'transfer,zelle,venmo,payment,journal,mobile payment,sell -,ira contrib', '#94A3B8'),
+      ('Retirement', '401k,401(k),roth 401k,employer match,retirement,pension,403b,457b', '#0D9488'),
+      ('HSA', 'hsa,health savings', '#06B6D4'),
       ('Other', '', '#6B7280');
 
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
@@ -269,6 +296,7 @@ function initializeSchema(db: Database.Database) {
   const KEYWORD_UPDATES: Record<string, string> = {
     'Utilities': 'electric,water,internet,phone,utility,pse,puget sound energy,xfinity,comcast,centurylink,t-mobile,verizon,at&t',
     'Transportation': 'gas,fuel,uber,lyft,parking,transit,metro,shell oil,chevron,exxon,mobil,arco,costco gas,bp#,sunoco,valero,speedway,marathon petro,wawa,circle k,phillips 66,76 ,casey,qt ,quiktrip,racetrac,pilot,flying j,love s,sheetz,kwik trip,good to go,orca,toll',
+    'Retirement': '401k,401(k),roth 401k,employer match,retirement,pension,403b,457b',
   };
   const updateKeywords = db.prepare('UPDATE categories SET keywords = ? WHERE name = ?');
   for (const [name, keywords] of Object.entries(KEYWORD_UPDATES)) {
@@ -293,10 +321,61 @@ function initializeSchema(db: Database.Database) {
     `).run(transportCat.id, ...gasPatterns, transportCat.id);
   }
 
+  // Migration: add Retirement and HSA categories if they don't exist
+  db.exec(`
+    INSERT OR IGNORE INTO categories (name, keywords, color) VALUES
+      ('Retirement', '401k,401(k),roth 401k,employer match,retirement,pension,403b,457b', '#0D9488'),
+      ('HSA', 'hsa,health savings', '#06B6D4');
+  `);
+
+  // Migration: re-categorize existing transactions matching Retirement/HSA keywords
+  // Run HSA first so "HSA Employee Contribution" matches HSA (via "hsa"), then
+  // Retirement catches remaining "Contributions" entries (from 401k statements)
+  const hsaCat = db.prepare("SELECT id FROM categories WHERE name = 'HSA'").get() as { id: number } | undefined;
+  const retirementCat = db.prepare("SELECT id FROM categories WHERE name = 'Retirement'").get() as { id: number } | undefined;
+  if (hsaCat) {
+    const hsaPatterns = ['%hsa%', '%health savings%'];
+    const hsaClauses = hsaPatterns.map(() => 'LOWER(description) LIKE ?').join(' OR ');
+    db.prepare(`
+      UPDATE transactions SET category_id = ?, type = 'transfer',
+        amount = CASE WHEN amount < 0 THEN ABS(amount) ELSE amount END
+      WHERE (${hsaClauses})
+        AND (category_id IS NULL OR category_id NOT IN (SELECT id FROM categories WHERE name = 'HSA'))
+    `).run(hsaCat.id, ...hsaPatterns);
+  }
+  if (retirementCat) {
+    const retirementPatterns = ['%401k%', '%401(k)%', '%roth 401k%', '%employer match%', '%retirement%', '%pension%', '%contribution%'];
+    const retirementClauses = retirementPatterns.map(() => 'LOWER(description) LIKE ?').join(' OR ');
+    db.prepare(`
+      UPDATE transactions SET category_id = ?, type = 'transfer',
+        amount = CASE WHEN amount < 0 THEN ABS(amount) ELSE amount END
+      WHERE (${retirementClauses})
+        AND (category_id IS NULL OR category_id NOT IN (SELECT id FROM categories WHERE name IN ('Retirement', 'HSA')))
+    `).run(retirementCat.id, ...retirementPatterns);
+  }
+
   // Migration: add account_id to goals if it doesn't exist
   try {
     db.prepare("SELECT account_id FROM goals LIMIT 1").get();
   } catch {
     db.exec("ALTER TABLE goals ADD COLUMN account_id INTEGER REFERENCES accounts(id)");
+  }
+
+  // Migration: add Plaid columns to accounts
+  try {
+    db.prepare("SELECT plaid_account_id FROM accounts LIMIT 1").get();
+  } catch {
+    db.exec("ALTER TABLE accounts ADD COLUMN plaid_account_id TEXT");
+    db.exec("ALTER TABLE accounts ADD COLUMN plaid_item_id INTEGER REFERENCES plaid_items(id)");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_accounts_plaid_account_id ON accounts(plaid_account_id)");
+  }
+
+  // Migration: add Plaid columns to transactions
+  try {
+    db.prepare("SELECT plaid_transaction_id FROM transactions LIMIT 1").get();
+  } catch {
+    db.exec("ALTER TABLE transactions ADD COLUMN plaid_transaction_id TEXT UNIQUE");
+    db.exec("ALTER TABLE transactions ADD COLUMN is_pending INTEGER DEFAULT 0");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_transactions_plaid_id ON transactions(plaid_transaction_id)");
   }
 }

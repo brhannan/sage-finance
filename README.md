@@ -10,7 +10,7 @@ So I built Sage Finance.
 
 ### What if your budget app actually understood you?
 
-Sage Finance is a self-hosted personal finance dashboard that runs locally on your machine. Your data stays in a SQLite database on your disk. No cloud sync, no ads, no third-party analytics watching you agonize over your DoorDash spending.
+Sage Finance is a self-hosted personal finance dashboard that runs locally on your machine. **Your data stays in a SQLite database on your disk. No cloud sync, no ads, no third-party analytics watching you agonize over your DoorDash spending. Your financial data never leaves your machine.**
 
 But the interesting part isn't what it *doesn't* do — it's what it does.
 
@@ -21,6 +21,35 @@ But the interesting part isn't what it *doesn't* do — it's what it does.
 **Monte Carlo FI projections.** Most financial independence calculators draw a single straight line into the future: "At 7% returns, you'll be FI in 14.3 years." That's a fantasy. Markets are volatile. You might get laid off. Your car might die. Sage Finance runs 500 simulated futures with realistic market volatility, expense shocks, income changes, and job loss risk, then shows you the full range of outcomes as a fan chart — from pessimistic (P10) to optimistic (P90). You don't get a single number; you get a probability distribution. Because that's what the future actually is.
 
 **Smart auto-categorization.** Keyword-based matching learns your categories and gets transactions sorted without manual work. No machine learning training required — it just works out of the box and improves as you add categories.
+
+### How is this different from Mint?
+
+Mint was a dashboard. Sage Finance is an engine.
+
+Mint showed you what you spent last month and slapped a red bar on it when you went over budget. It was backward-looking, generic, and passive. It never learned anything about *you* — it applied the same canned categories and the same "you spent more than usual on Restaurants" alerts to every user. And it sold your data to fund the whole operation. **Sage Finance runs entirely on your machine — your financial data lives in a SQLite file on your own disk, not on someone else's server.**
+
+Sage Finance is different in two fundamental ways:
+
+**1. The AI advisor is a real financial reasoning agent, not a chatbot skin.**
+
+This isn't a GPT wrapper that reads your balance and says "consider reducing discretionary spending." The advisor has tool-calling access to your full financial picture — income, expenses, savings rate, net worth, category trends, goals, linked accounts — and it *reasons* over that data to give you specific, actionable answers. Ask it "can I afford to quit my job in 6 months?" and it will actually model it against your burn rate, savings, and expense history. Ask it "what's my biggest financial risk right now?" and it will find it.
+
+More importantly, it gets smarter as your data grows. The more history it has, the better it understands your patterns — seasonal spending spikes, income variability, which categories are compressible vs. fixed. A financial advisor that's seen 6 months of your data gives fundamentally different advice than one that's seen 6 days.
+
+**2. Monte Carlo net worth projections model the world as it actually works.**
+
+Most financial planning tools draw a line: "at 7% annual returns, you'll have $X in Y years." That's not a plan, it's a wish. The real world has market crashes, job losses, medical emergencies, windfalls, and compounding uncertainty.
+
+Sage Finance runs 500 randomized simulations of your financial future with realistic market volatility, expense shocks, income disruption, and sequence-of-returns risk, then shows you the full probability distribution — from the P10 "things went badly" scenario to the P90 "things went well" scenario. You see the whole fan chart, not a single fantasy line.
+
+And this is just the beginning. The simulation engine is being extended to model:
+
+- **Major planned purchases** (house, car, wedding) and their downstream effects on cash flow and net worth
+- **Macroeconomic regime changes** — what happens to your plan if AI-driven automation causes widespread labor market disruption? What if your industry contracts?
+- **Tax law changes** — shifts in capital gains rates, retirement account rules, or income tax brackets that could materially alter your FI timeline
+- **Inflation scenarios** — persistent high inflation vs. deflationary shocks and how they interact with your specific asset allocation
+
+The goal isn't to predict the future. It's to stress-test your financial plan against the futures that actually matter — including the ones nobody else is modeling.
 
 ### The full dashboard
 
@@ -41,7 +70,7 @@ But the interesting part isn't what it *doesn't* do — it's what it does.
 - **Recharts** for charts, **Tailwind CSS** + **shadcn/ui** for the interface
 - **Papa Parse** for CSV ingestion
 
-Everything runs locally. No Docker required. Just `npm install`, set your `ANTHROPIC_API_KEY`, and go.
+**Everything runs locally. No Docker required.** Just `npm install`, set your `ANTHROPIC_API_KEY`, and go.
 
 ## Getting Started
 

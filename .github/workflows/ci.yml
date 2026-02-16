@@ -10,6 +10,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  checks: write
+  pull-requests: write
+  contents: read
+
 jobs:
   lint-typecheck:
     name: Lint & Typecheck
@@ -56,6 +61,7 @@ jobs:
       - name: Test Reporter
         if: always()
         uses: dorny/test-reporter@v1
+        continue-on-error: true
         with:
           name: Vitest Results
           path: test-results/junit.xml

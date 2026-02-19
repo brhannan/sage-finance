@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Observatory — Sage Finance Advisor</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="scanline-overlay"></div>
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo-mark">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <rect x="1" y="1" width="8" height="8" fill="var(--cyan)" opacity="0.9"/>
+          <rect x="11" y="1" width="8" height="8" fill="var(--cyan)" opacity="0.4"/>
+          <rect x="1" y="11" width="8" height="8" fill="var(--cyan)" opacity="0.4"/>
+          <rect x="11" y="11" width="8" height="8" fill="var(--cyan)" opacity="0.15"/>
+        </svg>
+      </div>
+      <span class="topbar-title">EVAL OBSERVATORY</span>
+      <span class="topbar-sep">—</span>
+      <span class="topbar-subtitle">Sage Finance Advisor</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-model" id="model-badge">—</span>
+      <span class="topbar-timestamp" id="last-run">—</span>
+      <div class="status-dot" id="status-dot"></div>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <!-- Summary Cards -->
+    <section class="cards-row" id="summary-cards">
+      <div class="card card-total">
+        <div class="card-label">TOTAL TESTS</div>
+        <div class="card-value" id="card-total">—</div>
+        <div class="card-sub" id="card-total-sub"></div>
+      </div>
+      <div class="card card-pass">
+        <div class="card-label">OVERALL PASS</div>
+        <div class="card-value" id="card-pass">—</div>
+        <div class="card-bar"><div class="card-bar-fill" id="card-pass-bar"></div></div>
+      </div>
+      <div class="card card-regression">
+        <div class="card-label">REGRESSION</div>
+        <div class="card-value" id="card-regression">—</div>
+        <div class="card-bar"><div class="card-bar-fill card-bar-regression" id="card-regression-bar"></div></div>
+      </div>
+      <div class="card card-capability">
+        <div class="card-label">CAPABILITY</div>
+        <div class="card-value" id="card-capability">—</div>
+        <div class="card-bar"><div class="card-bar-fill card-bar-capability" id="card-capability-bar"></div></div>
+      </div>
+      <div class="card card-cost">
+        <div class="card-label">CUMULATIVE COST</div>
+        <div class="card-value" id="card-cost">—</div>
+        <div class="card-sub" id="card-cost-sub"></div>
+      </div>
+    </section>
+
+    <!-- Charts Row -->
+    <section class="charts-grid">
+      <div class="chart-panel chart-wide">
+        <div class="panel-header">
+          <span class="panel-title">Pass Rate Over Time</span>
+          <span class="panel-badge">TIMESERIES</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="chart-passrate"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-panel">
+        <div class="panel-header">
+          <span class="panel-title">By Scenario</span>
+          <span class="panel-badge">BREAKDOWN</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="chart-scenarios"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-panel">
+        <div class="panel-header">
+          <span class="panel-title">Regression vs Capability</span>
+          <span class="panel-badge">SPLIT</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="chart-types"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-panel chart-narrow">
+        <div class="panel-header">
+          <span class="panel-title">Eval Cost</span>
+          <span class="panel-badge">$USD</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="chart-cost"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detail Table -->
+    <section class="table-panel">
+      <div class="panel-header">
+        <span class="panel-title">Latest Run Details</span>
+        <span class="panel-badge" id="table-run-label">—</span>
+        <div class="table-filters">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="failed">Failed</button>
+          <button class="filter-btn" data-filter="regression">Regression</button>
+          <button class="filter-btn" data-filter="capability">Capability</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th class="th-status"></th>
+              <th class="th-message">Test Case</th>
+              <th class="th-type">Type</th>
+              <th class="th-score">Score</th>
+              <th class="th-reason">Reason</th>
+            </tr>
+          </thead>
+          <tbody id="results-body">
+            <tr><td colspan="5" class="empty-state">Loading eval data&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bottombar">
+    <span>Powered by <strong>promptfoo</strong></span>
+    <span class="bottombar-sep">&middot;</span>
+    <span>Model evals for Sage Finance AI Advisor</span>
+  </footer>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

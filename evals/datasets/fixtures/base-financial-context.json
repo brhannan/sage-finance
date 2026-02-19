@@ -1,0 +1,175 @@
+{
+  "profile": {
+    "name": "Alex Chen",
+    "filing_status": "single",
+    "risk_tolerance": "moderate"
+  },
+  "savingsRate": {
+    "income": 4200,
+    "expenses": 3850
+  },
+  "trailingSavingsRate": {
+    "income": 97200,
+    "expenses": 66900,
+    "rate": 31.2,
+    "monthsWithIncome": 12
+  },
+  "netWorth": {
+    "total": 138250,
+    "assets": 145000,
+    "liabilities": 6750
+  },
+  "avgMonthlyIncome": 8100,
+  "accounts": [
+    { "id": 1, "name": "Wells Fargo Checking", "type": "checking", "institution": "Wells Fargo", "balance": 5200 },
+    { "id": 2, "name": "Ally High-Yield Savings", "type": "savings", "institution": "Ally Bank", "balance": 24000 },
+    { "id": 3, "name": "Vanguard 401k", "type": "retirement", "institution": "Vanguard", "balance": 68000 },
+    { "id": 4, "name": "Fidelity Roth IRA", "type": "retirement", "institution": "Fidelity", "balance": 22000 },
+    { "id": 5, "name": "Chase Sapphire", "type": "credit_card", "institution": "Chase", "balance": -2750 },
+    { "id": 6, "name": "Robinhood Brokerage", "type": "investment", "institution": "Robinhood", "balance": 15500 },
+    { "id": 7, "name": "HSA - HealthEquity", "type": "savings", "institution": "HealthEquity", "balance": 6300 },
+    { "id": 8, "name": "Citi Double Cash", "type": "credit_card", "institution": "Citi", "balance": -4000 }
+  ],
+  "topSpending": [
+    { "name": "Rent & Housing", "amount": 1850.00, "budget": 2000.00 },
+    { "name": "Groceries", "amount": 520.00, "budget": 500.00 },
+    { "name": "Dining & Restaurants", "amount": 380.00, "budget": 300.00 },
+    { "name": "Auto & Gas", "amount": 285.00 },
+    { "name": "Utilities", "amount": 195.00 },
+    { "name": "Shopping", "amount": 340.00 },
+    { "name": "Subscriptions", "amount": 85.00 },
+    { "name": "Health & Fitness", "amount": 95.00 },
+    { "name": "Entertainment", "amount": 60.00 },
+    { "name": "Insurance", "amount": 40.00 }
+  ],
+  "recentTransactions": [
+    { "date": "2026-02-15", "amount": -1850.00, "description": "Rent - Apartment 4B", "category": "Rent & Housing", "account": "Wells Fargo Checking" },
+    { "date": "2026-02-14", "amount": -78.50, "description": "Sushi Den", "category": "Dining & Restaurants", "account": "Chase Sapphire" },
+    { "date": "2026-02-13", "amount": -156.00, "description": "King Soopers", "category": "Groceries", "account": "Wells Fargo Checking" },
+    { "date": "2026-02-12", "amount": -52.00, "description": "Shell Gas Station", "category": "Auto & Gas", "account": "Wells Fargo Checking" },
+    { "date": "2026-02-11", "amount": -45.00, "description": "Chipotle", "category": "Dining & Restaurants", "account": "Chase Sapphire" },
+    { "date": "2026-02-10", "amount": -89.99, "description": "Amazon.com - Electronics", "category": "Shopping", "account": "Chase Sapphire" },
+    { "date": "2026-02-09", "amount": -125.00, "description": "Xcel Energy", "category": "Utilities", "account": "Wells Fargo Checking" },
+    { "date": "2026-02-08", "amount": -34.50, "description": "Amazon.com - Household", "category": "Shopping", "account": "Chase Sapphire" },
+    { "date": "2026-02-07", "amount": -95.00, "description": "Colorado Athletic Club", "category": "Health & Fitness", "account": "Chase Sapphire" },
+    { "date": "2026-02-06", "amount": -32.50, "description": "Illegal Pete's", "category": "Dining & Restaurants", "account": "Chase Sapphire" },
+    { "date": "2026-02-05", "amount": -85.00, "description": "Target", "category": "Shopping", "account": "Chase Sapphire" },
+    { "date": "2026-02-04", "amount": -48.50, "description": "Costco Gas", "category": "Auto & Gas", "account": "Wells Fargo Checking" },
+    { "date": "2026-02-03", "amount": -15.99, "description": "Netflix", "category": "Subscriptions", "account": "Chase Sapphire" },
+    { "date": "2026-02-02", "amount": -22.99, "description": "Spotify + Audible", "category": "Subscriptions", "account": "Chase Sapphire" },
+    { "date": "2026-02-01", "amount": -92.00, "description": "Guard and Grace", "category": "Dining & Restaurants", "account": "Chase Sapphire" },
+    { "date": "2026-01-30", "amount": -275.00, "description": "Costco Wholesale", "category": "Groceries", "account": "Wells Fargo Checking" },
+    { "date": "2026-01-28", "amount": -67.50, "description": "Amazon.com - Office", "category": "Shopping", "account": "Chase Sapphire" },
+    { "date": "2026-01-25", "amount": -55.00, "description": "King Soopers Fuel", "category": "Auto & Gas", "account": "Wells Fargo Checking" },
+    { "date": "2026-01-22", "amount": -120.00, "description": "REI - Running Shoes", "category": "Shopping", "account": "Chase Sapphire" },
+    { "date": "2026-01-20", "amount": -70.00, "description": "Xcel Energy", "category": "Utilities", "account": "Wells Fargo Checking" }
+  ],
+  "goals": [
+    { "name": "Emergency Fund", "type": "savings", "current_amount": 24000, "target_amount": 25000, "progress": 96.0, "account_id": 2 },
+    { "name": "House Down Payment", "type": "home_purchase", "current_amount": 15500, "target_amount": 100000, "progress": 15.5, "account_id": 6 },
+    { "name": "Retirement (FI)", "type": "fi", "current_amount": 90000, "target_amount": 1500000, "progress": 6.0, "account_id": null },
+    { "name": "Pay Off Credit Cards", "type": "debt_payoff", "current_amount": 6750, "target_amount": 6750, "progress": 0.0, "account_id": null }
+  ],
+  "recentPaychecks": [
+    {
+      "date": "2026-02-14",
+      "gross_pay": 5416.67,
+      "net_pay": 4200.00,
+      "employer": "TechCorp Inc.",
+      "pay_period_start": "2026-02-01",
+      "pay_period_end": "2026-02-14",
+      "federal_tax": 542.00,
+      "state_tax": 200.00,
+      "social_security": 336.00,
+      "medicare": 78.54,
+      "retirement_401k": 541.67,
+      "health_insurance": 125.00,
+      "dental_insurance": 15.00,
+      "vision_insurance": 8.00,
+      "hsa": 150.00
+    },
+    {
+      "date": "2026-01-31",
+      "gross_pay": 5416.67,
+      "net_pay": 4200.00,
+      "employer": "TechCorp Inc.",
+      "pay_period_start": "2026-01-16",
+      "pay_period_end": "2026-01-31",
+      "federal_tax": 542.00,
+      "state_tax": 200.00,
+      "social_security": 336.00,
+      "medicare": 78.54,
+      "retirement_401k": 541.67,
+      "health_insurance": 125.00,
+      "dental_insurance": 15.00,
+      "vision_insurance": 8.00,
+      "hsa": 150.00
+    },
+    {
+      "date": "2026-01-15",
+      "gross_pay": 5416.67,
+      "net_pay": 4200.00,
+      "employer": "TechCorp Inc.",
+      "pay_period_start": "2026-01-01",
+      "pay_period_end": "2026-01-15",
+      "federal_tax": 542.00,
+      "state_tax": 200.00,
+      "social_security": 336.00,
+      "medicare": 78.54,
+      "retirement_401k": 541.67,
+      "health_insurance": 125.00,
+      "dental_insurance": 15.00,
+      "vision_insurance": 8.00,
+      "hsa": 150.00
+    },
+    {
+      "date": "2025-12-31",
+      "gross_pay": 5416.67,
+      "net_pay": 4200.00,
+      "employer": "TechCorp Inc.",
+      "pay_period_start": "2025-12-16",
+      "pay_period_end": "2025-12-31",
+      "federal_tax": 542.00,
+      "state_tax": 200.00,
+      "social_security": 336.00,
+      "medicare": 78.54,
+      "retirement_401k": 541.67,
+      "health_insurance": 125.00,
+      "dental_insurance": 15.00,
+      "vision_insurance": 8.00,
+      "hsa": 150.00
+    }
+  ],
+  "trend": [
+    { "month": "2026-02", "income": 4200, "expenses": 3850, "savings": 350, "savingsRate": 8.3 },
+    { "month": "2026-01", "income": 8400, "expenses": 5200, "savings": 3200, "savingsRate": 38.1 },
+    { "month": "2025-12", "income": 8400, "expenses": 7520, "savings": 880, "savingsRate": 10.5 },
+    { "month": "2025-11", "income": 8400, "expenses": 5100, "savings": 3300, "savingsRate": 39.3 },
+    { "month": "2025-10", "income": 8400, "expenses": 5400, "savings": 3000, "savingsRate": 35.7 },
+    { "month": "2025-09", "income": 8400, "expenses": 5050, "savings": 3350, "savingsRate": 39.9 },
+    { "month": "2025-08", "income": 8400, "expenses": 5600, "savings": 2800, "savingsRate": 33.3 },
+    { "month": "2025-07", "income": 8400, "expenses": 5300, "savings": 3100, "savingsRate": 36.9 },
+    { "month": "2025-06", "income": 8400, "expenses": 5150, "savings": 3250, "savingsRate": 38.7 },
+    { "month": "2025-05", "income": 8400, "expenses": 5550, "savings": 2850, "savingsRate": 33.9 },
+    { "month": "2025-04", "income": 8400, "expenses": 5480, "savings": 2920, "savingsRate": 34.8 },
+    { "month": "2025-03", "income": 8400, "expenses": 5500, "savings": 2900, "savingsRate": 34.5 }
+  ],
+  "spendingEvents": [
+    {
+      "name": "Holiday Gifts 2025",
+      "category": "Shopping",
+      "description": "Christmas gifts for family and friends",
+      "date_start": "2025-12-10",
+      "date_end": "2025-12-25",
+      "total_amount": 850.00
+    },
+    {
+      "name": "Ski Trip to Breckenridge",
+      "category": "Travel",
+      "description": "Weekend ski trip with friends",
+      "date_start": "2025-12-27",
+      "date_end": "2025-12-29",
+      "total_amount": 650.00
+    }
+  ]
+}

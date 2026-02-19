@@ -39,3 +39,7 @@ next-env.d.ts
 /data/*.db
 /data/*.db-wal
 /data/*.db-shm
+
+# eval results (generated, not committed)
+/evals/results/*.json
+!/evals/results/.gitkeep

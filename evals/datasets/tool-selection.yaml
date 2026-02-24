@@ -1,0 +1,131 @@
+# Tool Selection Accuracy — 15 test cases
+# Tests whether the advisor calls the right tool(s) for a given user message.
+#
+# Tags:
+#   regression — should always pass; failures block CI
+#   capability — tracked over time; failures don't block
+
+# --- Regression cases ---
+
+- vars:
+    message: "I'm 32 years old and I live in Denver"
+    expectedTools: '["save_profile"]'
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "My total compensation is $180k base plus $20k bonus"
+    expectedTools: '["save_profile"]'
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "What did I spend at Amazon last month?"
+    expectedTools: '["search_transactions"]'
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "Show me my restaurant spending in December"
+    expectedTools: '["search_transactions"]'
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "I want to save $30,000 for a house down payment by 2028"
+    expectedTools: '["manage_goals"]'
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "Update my emergency fund goal to $30,000"
+    expectedTools: '["manage_goals"]'
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "That $450 charge was for a ski trip to Vail last weekend"
+    expectedTools: '["save_spending_event"]'
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+# --- Capability cases ---
+
+- vars:
+    message: "I just got promoted and my new salary is $160k"
+    expectedTools: '["save_profile"]'
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "Can you look up any charges over $200 from the past 3 months?"
+    expectedTools: '["search_transactions"]'
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "How much have I been spending on gas?"
+    expectedTools: '["search_transactions"]'
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "I'm wondering if I should increase my 401k contribution"
+    expectedTools: "[]"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "What's my savings rate?"
+    expectedTools: "[]"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "The holiday gifts in December were about $600 total"
+    expectedTools: '["save_spending_event"]'
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "I'm getting married next year and want to save $25k"
+    expectedTools: '["manage_goals"]'
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js
+
+- vars:
+    message: "Do you have any follow-up questions about my HSA?"
+    expectedTools: "[]"
+    forbiddenTools: '["save_followup"]'
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/tool-selection-grader.js

@@ -1,0 +1,37 @@
+# Promptfoo eval config for the AI Advisor agent.
+# Run: npm run eval (from project root)
+# View: npm run eval:view
+
+description: "Sage Finance AI Advisor Evals"
+
+# Passthrough prompt — the custom provider handles prompt construction internally.
+# The {{message}} variable is passed to the provider via context.vars.
+prompts:
+  - "{{message}}"
+
+providers:
+  - id: file://providers/advisor-provider.ts
+    label: advisor-haiku
+    config:
+      model: claude-haiku-4-5-20251001
+      temperature: 0
+      max_tokens: 1024
+
+defaultTest:
+  vars:
+    financialContext: file://datasets/fixtures/base-financial-context.json
+
+  options:
+    provider:
+      id: anthropic:messages:claude-haiku-4-5-20251001
+    rubricPrompt: |
+      You are grading an AI financial advisor's response. Be strict about factual accuracy.
+      The advisor has access to the user's financial data and should cite real numbers from it.
+      Grade based on the rubric provided, not on general helpfulness.
+
+tests:
+  - file://datasets/tool-selection.yaml
+  - file://datasets/financial-reasoning.yaml
+
+outputPath:
+  - evals/results/latest.json

@@ -1,0 +1,229 @@
+# Financial Reasoning — 13 test cases
+# Tests whether the advisor gives grounded advice without hallucinating numbers.
+#
+# Each case uses two graders:
+#   1. no-hallucination-grader.js (deterministic) — checks cited numbers exist in context
+#   2. llm-rubric (LLM judge) — checks reasoning quality per rubric
+#
+# Tags:
+#   regression — should always pass; failures block CI
+#   capability — tracked over time; failures don't block
+
+# --- Regression cases ---
+
+- vars:
+    message: "What's my net worth?"
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. State a net worth figure close to $138,250
+        2. Break down assets (~$145,000) and liabilities (~$6,750)
+        3. Reference specific account balances
+        4. Not fabricate any dollar amounts
+      weight: 0.6
+
+- vars:
+    message: "How much am I saving each month?"
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Use the trailing 12-month savings rate (31.2%) or trailing data, NOT partial current month
+        2. Reference average monthly income (~$8,100) for calculations
+        3. Acknowledge that current month data is partial
+        4. Cite a monthly savings figure derived from trailing data (~$2,525/month)
+      weight: 0.6
+
+- vars:
+    message: "Am I on track for my emergency fund goal?"
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Note that the emergency fund is at $24,000 of $25,000 target (96% complete)
+        2. Be encouraging about the near-complete progress
+        3. Mention the goal is tracked in the Ally High-Yield Savings account
+        4. Possibly suggest what to do after reaching the goal
+      weight: 0.6
+
+- vars:
+    message: "How does my spending break down this month?"
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Reference actual spending categories and amounts from the data
+        2. Mention top categories like Rent ($1,850), Groceries ($520), Dining ($380)
+        3. Note any categories over budget (Groceries over $500 budget, Dining over $300 budget)
+        4. Not invent categories or amounts not present in the data
+      weight: 0.6
+
+- vars:
+    message: "What's my savings rate?"
+    testType: regression
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Cite the trailing 12-month savings rate of 31.2%
+        2. Distinguish between the partial current month and the trailing rate
+        3. Note that the current month (Feb) shows only 8.3% because it's partial
+        4. Not use the partial current month rate as the "real" savings rate
+      weight: 0.6
+
+# --- Capability cases ---
+
+- vars:
+    message: "Should I pay off my credit cards or invest more?"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Reference actual credit card balances (Chase $2,750 + Citi $4,000 = $6,750 total)
+        2. Consider interest rates on credit card debt
+        3. Weigh paying debt vs investing returns
+        4. Provide a clear recommendation with reasoning
+        5. Not fabricate balance amounts
+      weight: 0.6
+
+- vars:
+    message: "Can I afford a $500K house?"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Reference the user's income ($145K total comp, ~$8,100/mo net)
+        2. Reference current down payment progress ($15,500 of $100,000 goal)
+        3. Consider debt-to-income ratio or affordability guidelines
+        4. Provide a realistic assessment with concrete numbers
+        5. Not fabricate income or savings figures
+      weight: 0.6
+
+- vars:
+    message: "My December spending was way higher than usual"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Note December expenses ($7,520) were significantly higher than typical months (~$5,200-5,600)
+        2. Reference the low December savings rate (10.5%) vs typical (~31-39%)
+        3. Acknowledge known spending events (Holiday Gifts $850, Ski Trip $650)
+        4. Compare to surrounding months for context
+      weight: 0.6
+
+- vars:
+    message: "How long until I reach FI?"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Reference the FI goal ($1,500,000 target, $90,000 current, 6% progress)
+        2. State assumptions about investment returns or growth rates
+        3. Use actual savings data to project timeline
+        4. NOT give a precise date without clearly stating it's an estimate with assumptions
+        5. Acknowledge uncertainty in long-term projections
+      weight: 0.6
+
+- vars:
+    message: "I got a $5,000 bonus. What should I do with it?"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Consider multiple allocation options based on the user's actual goals
+        2. Reference the nearly-complete emergency fund ($1,000 remaining)
+        3. Consider credit card debt ($6,750 total)
+        4. Mention the house down payment goal
+        5. Provide a specific suggested allocation with reasoning
+      weight: 0.6
+
+- vars:
+    message: "Is my 401k contribution rate good enough?"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Reference the actual 401k contribution ($541.67/paycheck from paycheck data)
+        2. Calculate the contribution rate (~10% of gross)
+        3. Compare to common guidelines (e.g., 10-15% recommended)
+        4. Mention employer match if relevant (or note it's unknown)
+        5. Consider the user's overall financial picture
+      weight: 0.6
+
+- vars:
+    message: "Compare my spending this month to last month"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Use actual trend data for Feb 2026 and Jan 2026
+        2. Note Feb expenses ($3,850 so far) vs Jan ($5,200)
+        3. Acknowledge that Feb is still partial/in-progress
+        4. Reference specific categories if possible
+        5. Not compare raw partial-month numbers as if they're complete
+      weight: 0.6
+
+- vars:
+    message: "What are my biggest financial risks?"
+    testType: capability
+  assert:
+    - type: javascript
+      value: file://graders/no-hallucination-grader.js
+      weight: 0.4
+    - type: llm-rubric
+      value: |
+        The response must:
+        1. Identify risks grounded in actual data (e.g., credit card debt, single income source)
+        2. Reference specific numbers (e.g., $6,750 CC debt, emergency fund nearly full)
+        3. Consider multiple risk categories (debt, insurance, savings adequacy, income concentration)
+        4. Not invent risks unrelated to the user's data
+        5. Prioritize risks by severity
+      weight: 0.6

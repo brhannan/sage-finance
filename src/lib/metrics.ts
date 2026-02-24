@@ -54,7 +54,7 @@ export function getTrailingSavingsRate(months: number = 12): { rate: number; inc
   return { rate: Math.round(rate * 10) / 10, income, expenses, monthsWithIncome: monthsWithIncomeResult.count };
 }
 
-export function getNetWorth(): { total: number; assets: number; liabilities: number; history: Array<{ date: string; amount: number }> } {
+export function getNetWorth(): { total: number; assets: number; liabilities: number; history: Array<{ date: string; assets: number; liabilities: number; netWorth: number }> } {
   const db = getDb();
 
   // Get latest balance for each active account
@@ -77,10 +77,12 @@ export function getNetWorth(): { total: number; assets: number; liabilities: num
     }
   }
 
-  // Get net worth history (monthly snapshots)
+  // Get net worth history (monthly snapshots) with assets/liabilities breakdown
   const history = db.prepare(`
     SELECT strftime('%Y-%m', b.date) as date,
-           SUM(CASE WHEN a.type IN ('credit_card', 'loan') THEN -ABS(b.balance) ELSE b.balance END) as amount
+           SUM(CASE WHEN a.type NOT IN ('credit_card', 'loan') THEN b.balance ELSE 0 END) as assets,
+           SUM(CASE WHEN a.type IN ('credit_card', 'loan') THEN ABS(b.balance) ELSE 0 END) as liabilities,
+           SUM(CASE WHEN a.type IN ('credit_card', 'loan') THEN -ABS(b.balance) ELSE b.balance END) as netWorth
     FROM balances b
     JOIN accounts a ON a.id = b.account_id
     WHERE a.is_active = 1
@@ -91,7 +93,7 @@ export function getNetWorth(): { total: number; assets: number; liabilities: num
     )
     GROUP BY strftime('%Y-%m', b.date)
     ORDER BY date
-  `).all() as Array<{ date: string; amount: number }>;
+  `).all() as Array<{ date: string; assets: number; liabilities: number; netWorth: number }>;
 
   return { total: assets - liabilities, assets, liabilities, history };
 }

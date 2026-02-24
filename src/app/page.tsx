@@ -34,9 +34,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  LineChart,
-  Line,
   ComposedChart,
+  Line,
   Bar,
   XAxis,
   YAxis,
@@ -49,7 +48,7 @@ interface NetWorthData {
   total: number;
   assets: number;
   liabilities: number;
-  history: Array<{ date: string; amount: number }>;
+  history: Array<{ date: string; assets: number; liabilities: number; netWorth: number }>;
 }
 
 interface SavingsRateData {
@@ -125,6 +124,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   const [chartOpen, setChartOpen] = useState(false);
+  const [netWorthChartOpen, setNetWorthChartOpen] = useState(false);
 
   // Quick-add transaction state
   const [addOpen, setAddOpen] = useState(false);
@@ -231,6 +231,12 @@ export default function HomePage() {
     ...d,
     label: new Date(d.month + "-15").toLocaleString("en-US", { month: "short" }),
     negExpenses: -d.expenses,
+  }));
+
+  const netWorthChartData = (netWorth?.history ?? []).map((d) => ({
+    ...d,
+    label: new Date(d.date + "-15").toLocaleString("en-US", { month: "short" }),
+    negLiabilities: -d.liabilities,
   }));
 
   if (loading) {
@@ -382,7 +388,7 @@ export default function HomePage() {
       {/* Top Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Net Worth */}
-        <Card>
+        <Card className="relative overflow-hidden">
           <CardHeader className="pb-2">
             <CardDescription>Net Worth</CardDescription>
             <CardTitle className="text-3xl">
@@ -390,25 +396,6 @@ export default function HomePage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {netWorth && netWorth.history.length > 1 && (
-              <div className="h-[60px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={netWorth.history}>
-                    <Line
-                      type="monotone"
-                      dataKey="amount"
-                      stroke="#3B82F6"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <Tooltip
-                      formatter={(value: number | undefined) => [fmt(value ?? 0), "Net Worth"]}
-                      labelFormatter={(label) => String(label)}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
             {netWorth && (
               <div className="flex justify-between text-sm text-muted-foreground mt-2">
                 <span>Assets: {fmt(netWorth.assets)}</span>
@@ -424,6 +411,32 @@ export default function HomePage() {
               View details
             </Link>
           </CardFooter>
+          {netWorthChartData.length > 1 && (
+            <div
+              className="absolute bottom-2 right-2 w-[100px] bg-white/60 backdrop-blur-sm rounded-md border border-white/40 p-1 cursor-pointer group hover:bg-white/80 transition-colors"
+              onClick={() => setNetWorthChartOpen(true)}
+            >
+              <div className="h-[48px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={netWorthChartData}
+                    margin={{ top: 1, right: 1, left: 1, bottom: 1 }}
+                    barGap={-8}
+                  >
+                    <Bar dataKey="assets" fill="#6BAF8D" radius={[1, 1, 0, 0]} />
+                    <Bar dataKey="negLiabilities" fill="#E8927C" radius={[0, 0, 1, 1]} />
+                    <Line
+                      type="monotone"
+                      dataKey="netWorth"
+                      stroke="#3B82F6"
+                      strokeWidth={1}
+                      dot={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* Savings Rate */}
@@ -689,6 +702,104 @@ export default function HomePage() {
                           fill="#6B7280"
                         >
                           {fmtShort(d.savings)} ({d.savingsRate}%)
+                        </text>
+                      );
+                    }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Net Worth Chart Dialog */}
+      <Dialog open={netWorthChartOpen} onOpenChange={setNetWorthChartOpen}>
+        <DialogContent className="sm:max-w-[750px] backdrop-blur-md border-white/50" style={{ background: "rgba(255,255,255,0.4)" }}>
+          <DialogHeader>
+            <DialogTitle>Net Worth Over Time</DialogTitle>
+          </DialogHeader>
+          {netWorthChartData.length > 0 && (
+            <div className="glass-chart h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={netWorthChartData}
+                  margin={{ top: 20, right: 12, left: 12, bottom: 0 }}
+                  barSize={60}
+                  barGap={-60}
+                >
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: "#6B7280" }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                    tickFormatter={(v: number) => {
+                      if (v === 0) return "$0";
+                      const abs = Math.abs(v);
+                      const label = abs >= 1000 ? `$${(abs / 1000).toFixed(abs % 1000 === 0 ? 0 : 1)}k` : `$${abs}`;
+                      return v < 0 ? `-${label}` : label;
+                    }}
+                    width={52}
+                  />
+                  <ReferenceLine y={0} stroke="#D1D5DB" strokeWidth={1} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0]?.payload as { label: string; date: string; assets: number; liabilities: number; netWorth: number };
+                      if (!d) return null;
+                      return (
+                        <div className="bg-white border rounded-lg shadow-sm px-3 py-2 text-sm">
+                          <p className="font-medium mb-1">{d.label} {d.date.slice(0, 4)}</p>
+                          <p className="text-muted-foreground">Assets: <span className="text-[#6BAF8D]">{fmt(d.assets)}</span></p>
+                          <p className="text-muted-foreground">Liabilities: <span className="text-[#E8927C]">{fmt(d.liabilities)}</span></p>
+                          <p className="text-muted-foreground">
+                            Net Worth: <span className={d.netWorth >= 0 ? "text-[#3B82F6]" : "text-red-500"}>{fmt(d.netWorth)}</span>
+                          </p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar
+                    dataKey="assets"
+                    fill="#6BAF8D"
+                    radius={[3, 3, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="negLiabilities"
+                    fill="#E8927C"
+                    radius={[0, 0, 3, 3]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="netWorth"
+                    stroke="#3B82F6"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: "#3B82F6", strokeWidth: 0 }}
+                    label={({ x, y, index }: { x?: string | number; y?: string | number; index?: number }) => {
+                      if (x == null || y == null || index == null) return null;
+                      const d = netWorthChartData[index];
+                      if (!d) return null;
+                      const nx = Number(x), ny = Number(y);
+                      const fmtShort = (v: number) => {
+                        const abs = Math.abs(v);
+                        const s = abs >= 1000 ? `$${(abs / 1000).toFixed(1)}k` : `$${Math.round(abs)}`;
+                        return v < 0 ? `-${s}` : s;
+                      };
+                      return (
+                        <text
+                          x={nx}
+                          y={ny - 10}
+                          textAnchor="middle"
+                          fontSize={11}
+                          fill="#6B7280"
+                        >
+                          {fmtShort(d.netWorth)}
                         </text>
                       );
                     }}

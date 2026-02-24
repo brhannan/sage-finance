@@ -74,6 +74,26 @@ describe('metrics (database-backed)', () => {
       expect(result.history).toBeInstanceOf(Array);
       expect(result.history.length).toBeGreaterThanOrEqual(1);
     });
+
+    it('history entries have assets, liabilities, and netWorth fields', () => {
+      const result = getNetWorth();
+      for (const entry of result.history) {
+        expect(entry).toHaveProperty('date');
+        expect(entry).toHaveProperty('assets');
+        expect(entry).toHaveProperty('liabilities');
+        expect(entry).toHaveProperty('netWorth');
+        expect(typeof entry.assets).toBe('number');
+        expect(typeof entry.liabilities).toBe('number');
+        expect(typeof entry.netWorth).toBe('number');
+      }
+    });
+
+    it('netWorth equals assets minus liabilities for each history entry', () => {
+      const result = getNetWorth();
+      for (const entry of result.history) {
+        expect(entry.netWorth).toBe(entry.assets - entry.liabilities);
+      }
+    });
   });
 
   // --- getSpendingByCategory ---

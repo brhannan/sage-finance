@@ -37,12 +37,14 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import {
-  LineChart,
+  ComposedChart,
+  Bar,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  ReferenceLine,
   ResponsiveContainer,
 } from "recharts";
 
@@ -50,7 +52,7 @@ interface NetWorthData {
   total: number;
   assets: number;
   liabilities: number;
-  history: Array<{ date: string; amount: number }>;
+  history: Array<{ date: string; assets: number; liabilities: number; netWorth: number }>;
 }
 
 interface AccountWithBalance {
@@ -390,21 +392,65 @@ export default function NetWorthPage() {
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={netWorth.history}>
+                <ComposedChart
+                  data={netWorth.history.map((d) => ({
+                    ...d,
+                    label: new Date(d.date + "-15").toLocaleString("en-US", { month: "short", year: "2-digit" }),
+                    negLiabilities: -d.liabilities,
+                  }))}
+                  margin={{ top: 10, right: 12, left: 12, bottom: 0 }}
+                  barGap={-40}
+                >
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis
-                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 12, fill: "#6B7280" }}
                   />
-                  <Tooltip formatter={(value: number | undefined) => [fmt(value ?? 0), "Net Worth"]} />
+                  <YAxis
+                    tickFormatter={(v: number) => {
+                      if (v === 0) return "$0";
+                      const abs = Math.abs(v);
+                      const label = abs >= 1000 ? `$${(abs / 1000).toFixed(abs % 1000 === 0 ? 0 : 1)}k` : `$${abs}`;
+                      return v < 0 ? `-${label}` : label;
+                    }}
+                  />
+                  <ReferenceLine y={0} stroke="#D1D5DB" strokeWidth={1} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0]?.payload as { label: string; date: string; assets: number; liabilities: number; netWorth: number };
+                      if (!d) return null;
+                      return (
+                        <div className="bg-white border rounded-lg shadow-sm px-3 py-2 text-sm">
+                          <p className="font-medium mb-1">{d.date}</p>
+                          <p className="text-muted-foreground">Assets: <span className="text-[#6BAF8D]">{fmt(d.assets)}</span></p>
+                          <p className="text-muted-foreground">Liabilities: <span className="text-[#E8927C]">{fmt(d.liabilities)}</span></p>
+                          <p className="text-muted-foreground">
+                            Net Worth: <span className={d.netWorth >= 0 ? "text-[#3B82F6]" : "text-red-500"}>{fmt(d.netWorth)}</span>
+                          </p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar
+                    dataKey="assets"
+                    fill="#6BAF8D"
+                    radius={[3, 3, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="negLiabilities"
+                    fill="#E8927C"
+                    radius={[0, 0, 3, 3]}
+                  />
                   <Line
                     type="monotone"
-                    dataKey="amount"
+                    dataKey="netWorth"
                     stroke="#3B82F6"
                     strokeWidth={2}
                     dot={{ fill: "#3B82F6", r: 3 }}
                   />
-                </LineChart>
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
